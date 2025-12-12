@@ -1,25 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
-
-    <head>
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
     <!-- APP IDENTITY -->
-    <title>SYLOX FINANCE</title>
-    <meta name="apple-mobile-web-app-title" content="SYLOX FINANCE">
-    <meta name="application-name" content="SYLOX FINANCE">
-    
-    <!-- APP CAPABILITIES -->
+    <title>SYLOX</title>
+    <meta name="apple-mobile-web-app-title" content="SYLOX">
+    <meta name="application-name" content="SYLOX">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f0f13">
 
-    <!-- APP ICON (Generated from SYED Monolith Logo) -->
+    <!-- APP ICON -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' style='background:%230f0f13'><rect width='512' height='512' fill='%230f0f13'/><path d='M200 100 L260 100 L240 412 L180 412 Z' fill='%232ecc71' style='filter:drop-shadow(0 0 20px %232ecc71);'/><path d='M290 180 L320 180 L310 330 L280 330 Z' fill='rgba(255,255,255,0.3)'/></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' style='background:%230f0f13'><rect width='512' height='512' fill='%230f0f13'/><path d='M200 100 L260 100 L240 412 L180 412 Z' fill='%232ecc71' style='filter:drop-shadow(0 0 20px %232ecc71);'/><path d='M290 180 L320 180 L310 330 L280 330 Z' fill='rgba(255,255,255,0.3)'/></svg>">
 
-    <!-- FONTS -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -55,26 +51,19 @@
         .big-number { font-size: 3.5rem; font-weight: 800; letter-spacing: -2px; margin: 10px 0; }
         .sub-number { font-size: 1.2rem; font-weight: 600; color: var(--text-muted); margin-top: 5px; }
         
-        /* --- NEW BRANDING: SYED SYSTEMS --- */
+        /* BRANDING */
         .brand-wrapper {
             position: absolute; top: 25px; left: 25px;
-            display: flex; align-items: center;
-            gap: 12px; pointer-events: none;
-            z-index: 50;
+            display: flex; align-items: center; gap: 12px; pointer-events: none; z-index: 50;
         }
         .brand-mark {
-            width: 4px; height: 34px;
-            background: var(--primary);
-            box-shadow: 0 0 15px var(--primary);
-            border-radius: 4px;
-            position: relative;
-            transform: skewX(-10deg);
+            width: 4px; height: 34px; background: var(--primary);
+            box-shadow: 0 0 15px var(--primary); border-radius: 4px;
+            position: relative; transform: skewX(-10deg);
         }
         .brand-mark::after {
-            content: ''; position: absolute;
-            top: 10px; left: 8px; width: 2px; height: 14px;
-            background: rgba(255,255,255,0.3);
-            border-radius: 2px;
+            content: ''; position: absolute; top: 10px; left: 8px; width: 2px; height: 14px;
+            background: rgba(255,255,255,0.3); border-radius: 2px;
         }
         .brand-text-col { display: flex; flex-direction: column; justify-content: center; }
         .brand-title {
@@ -98,7 +87,9 @@
 
         .screen {
             flex: 1; display: none; flex-direction: column;
-            padding: 20px; overflow-y: auto; padding-bottom: 100px;
+            padding: 20px; 
+            padding-top: max(20px, env(safe-area-inset-top)); /* NOTCH SAFE */
+            overflow-y: auto; padding-bottom: 100px;
         }
         .screen.active { display: flex; }
 
@@ -114,8 +105,7 @@
         .chart-container { position: relative; height: 220px; width: 100%; display: flex; justify-content: center; }
 
         .report-card {
-            background: rgba(52, 152, 219, 0.05);
-            border: 1px solid rgba(52, 152, 219, 0.3);
+            background: rgba(52, 152, 219, 0.05); border: 1px solid rgba(52, 152, 219, 0.3);
             border-radius: 16px; padding: 20px; margin-bottom: 20px;
         }
         .report-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem; }
@@ -178,12 +168,25 @@
             border: 1px solid rgba(231, 76, 60, 0.5);
         }
 
+        /* --- FIXED INPUTS & DROPDOWNS --- */
         input, select {
-            width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #444;
+            width: 100%; 
+            max-width: 100%; /* Fix overflow */
+            background: rgba(0,0,0,0.3); border: 1px solid #444;
             color: white; padding: 16px; border-radius: 12px;
             font-size: 1.1rem; margin-bottom: 15px; outline: none;
             transition: border 0.2s;
+            /* iOS Fix for Dropdowns */
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px top 50%;
+            background-size: 12px auto;
         }
+        /* Ensure dropdown options are readable */
+        option { background: #1e1e24; color: white; }
+        
         input:focus, select:focus { border-color: var(--primary); }
         input[type="date"] { color-scheme: dark; }
 
@@ -324,7 +327,7 @@
         
         <!-- FOOTER LOGO -->
         <div class="brand-footer">
-            ENGINEERED BY SYED
+            ENGINEERED BY SYLOX
         </div>
     </div>
 
@@ -334,8 +337,8 @@
         <div class="brand-wrapper">
             <div class="brand-mark"></div>
             <div class="brand-text-col">
-                <span class="brand-title">SYED</span>
-                <span class="brand-subtitle">SYSTEMS</span>
+                <span class="brand-title">SYLOX</span>
+                <span class="brand-subtitle">FINANCE</span>
             </div>
         </div>
         
@@ -372,12 +375,10 @@
     <div id="screen-history" class="screen">
         <h2>Dashboard</h2>
         
-        <!-- THE HANGAR (CONNECTED) -->
         <div class="card">
             <h3>The Hangar</h3>
             <p class="text-muted" style="font-size:0.8rem; margin-bottom:10px;">Past Flight Reports</p>
             <select id="history-month-selector" onchange="updateDashboard(this.value)" style="margin-bottom:15px; padding:10px; font-size:0.9rem;">
-                <!-- Populated by JS -->
             </select>
             
             <div id="monthly-report-card" class="report-card" style="display:none;">
