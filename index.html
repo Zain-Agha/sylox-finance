@@ -168,10 +168,12 @@
         }
 
         /* --- FIXED INPUTS & DROPDOWNS --- */
-         /* 1. SHARED BASE (Fixes the date width/padding issue) */
+        
+        /* 1. Base Styles for BOTH Inputs and Selects (Fixes Width/Padding Overflow) */
         input, select {
             width: 100%; 
-            box-sizing: border-box; /* <--- CRITICAL FIX for Date Bar */
+            max-width: 100%;
+            box-sizing: border-box; /* This fixes the date bar extending beyond screen */
             background: rgba(0,0,0,0.3); 
             border: 1px solid #444;
             color: white; 
@@ -183,7 +185,7 @@
             transition: border 0.2s;
         }
 
-        /* 2. DROPDOWNS ONLY (Adds the arrow & padding) */
+        /* 2. Styles ONLY for Dropdowns (Adds Arrow) */
         select {
             -webkit-appearance: none;
             appearance: none;
@@ -191,26 +193,15 @@
             background-repeat: no-repeat;
             background-position: right 15px top 50%;
             background-size: 12px auto;
-           /* Space for the arrow so text doesn't overlap */
-        }
-
-        /* 3. INPUTS ONLY (Removes arrow from Name, Amount, Date) */
-        input {
-            background-image: none;
-        }
-        
-        /* Dropdown Specific Fix */
-        select {
-            -webkit-appearance: none;
-            appearance: none;
-            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
-            background-repeat: no-repeat;
-            background-position: right 15px top 50%;
-            background-size: 12px auto;
-            padding-right: 40px; /* Space for arrow */
+            padding-right: 40px; /* Make space for arrow */
         }
         option { background: #1e1e24; color: white; }
         
+        /* 3. Styles ONLY for Inputs (Ensures NO Arrow) */
+        input {
+            background-image: none;
+        }
+
         input:focus, select:focus { border-color: var(--primary); }
         input[type="date"] { color-scheme: dark; }
 
@@ -249,6 +240,7 @@
             width: 100%; border-radius: 25px 25px 0 0; padding: 30px 20px;
             box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
             animation: slideUp 0.3s ease-out; border-top: 1px solid #333;
+            box-sizing: border-box; /* Fix for Modal Padding */
         }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
@@ -830,7 +822,6 @@
             if(!appData.startDate) return 0;
             const stats = getFinancials();
             
-            // Start Date Logic
             let start = new Date(appData.startDate);
             if (appData.transactions.length > 0) {
                  const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
