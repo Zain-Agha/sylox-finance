@@ -21,6 +21,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
+        /* --- CSS VARIABLES & VISUALS --- */
         :root {
             --bg-color: #0f0f13;
             --card-color: rgba(30, 30, 36, 0.7);
@@ -33,19 +34,27 @@
             --text-muted: #a0a0a0;
             --brand-font: 'Orbitron', sans-serif;
         }
+
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
         body {
-            background-color: var(--bg-color); color: var(--text-main); font-family: 'Inter', sans-serif;
-            margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            margin: 0; padding: 0; height: 100vh;
+            display: flex; flex-direction: column; overflow: hidden;
             background-image: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #0f0f13 70%);
         }
+
         h1, h2, h3 { margin: 0; font-weight: 800; }
         .text-muted { color: var(--text-muted); font-size: 0.9rem; }
         .big-number { font-size: 3.5rem; font-weight: 800; letter-spacing: -2px; margin: 10px 0; }
         .sub-number { font-size: 1.2rem; font-weight: 600; color: var(--text-muted); margin-top: 5px; }
         
+        /* BRANDING */
         .brand-wrapper {
-            position: absolute; top: 25px; left: 25px; display: flex; align-items: center; gap: 12px; pointer-events: none; z-index: 50;
+            position: absolute; top: 25px; left: 25px;
+            display: flex; align-items: center; gap: 12px; pointer-events: none; z-index: 50;
         }
         .brand-mark {
             width: 4px; height: 34px; background: var(--primary); box-shadow: 0 0 15px var(--primary);
@@ -57,17 +66,21 @@
         }
         .brand-text-col { display: flex; flex-direction: column; justify-content: center; }
         .brand-title {
-            font-family: var(--brand-font); font-weight: 900; font-size: 1.2rem; letter-spacing: 0.15em; line-height: 1;
-            background: linear-gradient(to bottom, #ffffff, #b0b0b0); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            font-family: var(--brand-font); font-weight: 900; font-size: 1.2rem;
+            letter-spacing: 0.15em; line-height: 1;
+            background: linear-gradient(to bottom, #ffffff, #b0b0b0);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
             filter: drop-shadow(0 2px 10px rgba(0,0,0,0.5));
         }
         .brand-subtitle {
-            font-family: 'Inter', sans-serif; font-size: 0.5rem; font-weight: 700; letter-spacing: 0.4em; color: var(--primary);
+            font-family: 'Inter', sans-serif; font-size: 0.5rem; font-weight: 700;
+            letter-spacing: 0.4em; color: var(--primary);
             margin-top: 4px; text-transform: uppercase; margin-left: 2px;
         }
         .brand-footer {
-            text-align: center; margin-top: 40px; margin-bottom: 20px; font-family: 'Inter', sans-serif; font-size: 0.65rem;
-            letter-spacing: 2px; color: rgba(255,255,255,0.15); text-transform: uppercase;
+            text-align: center; margin-top: 40px; margin-bottom: 20px;
+            font-family: 'Inter', sans-serif; font-size: 0.65rem; letter-spacing: 2px;
+            color: rgba(255,255,255,0.15); text-transform: uppercase;
             border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px;
         }
 
@@ -80,54 +93,95 @@
         .screen.active { display: flex; }
 
         .card {
-            background: var(--card-color); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 20px; padding: 20px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            background: var(--card-color); 
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 20px; margin-bottom: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
         }
+
         .chart-container { position: relative; height: 220px; width: 100%; display: flex; justify-content: center; }
-        .report-card { background: rgba(52, 152, 219, 0.05); border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+
+        .report-card {
+            background: rgba(52, 152, 219, 0.05); border: 1px solid rgba(52, 152, 219, 0.3);
+            border-radius: 16px; padding: 20px; margin-bottom: 20px;
+        }
         .report-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem; }
         .leak-highlight { color: var(--danger); font-weight: bold; }
         .save-highlight { color: var(--primary); font-weight: bold; }
-        
+
         .streak-container {
-            display: inline-flex; align-items: center; background: rgba(255, 165, 0, 0.15); border: 1px solid orange;
-            padding: 6px 15px; border-radius: 20px; margin-top: 5px; margin-bottom: 10px;
-            font-weight: 800; color: orange; font-size: 0.85rem; box-shadow: 0 0 10px rgba(255, 165, 0, 0.2); display: none;
+            display: inline-flex; align-items: center;
+            background: rgba(255, 165, 0, 0.15); border: 1px solid orange;
+            padding: 6px 15px; border-radius: 20px;
+            margin-top: 5px; margin-bottom: 10px;
+            font-weight: 800; color: orange; font-size: 0.85rem;
+            box-shadow: 0 0 10px rgba(255, 165, 0, 0.2);
+            display: none;
         }
         .flame-icon { margin-right: 6px; font-size: 1.1rem; animation: flicker 1.5s infinite alternate; }
         @keyframes flicker { 0% { opacity: 0.8; transform: scale(1); } 100% { opacity: 1; transform: scale(1.2); } }
 
         .goal-container {
-            position: relative; width: 100%; height: 220px; border-radius: 16px; overflow: hidden; margin-bottom: 20px;
-            background-size: contain; background-repeat: no-repeat; background-position: center; background-color: #000;
-            border: 1px solid #333; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            position: relative; width: 100%; height: 220px;
+            border-radius: 16px; overflow: hidden; margin-bottom: 20px;
+            background-size: contain; background-repeat: no-repeat;
+            background-position: center; background-color: #000;
+            border: 1px solid #333; display: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
         .goal-overlay {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3);
-            display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.5rem; transition: backdrop-filter 0.5s ease;
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 1.5rem;
+            transition: backdrop-filter 0.5s ease;
         }
-        .fuel-track { width: 100%; height: 14px; background: #222; border-radius: 10px; margin: 15px 0; overflow: hidden; position: relative; border: 1px solid rgba(255,255,255,0.1); }
-        .fuel-bar { height: 100%; width: 100%; background: var(--primary-grad); transition: width 0.5s ease, background 0.5s ease; box-shadow: 0 0 10px rgba(46, 204, 113, 0.4); }
-        
+
+        .fuel-track {
+            width: 100%; height: 14px;
+            background: #222; border-radius: 10px;
+            margin: 15px 0; overflow: hidden; position: relative;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .fuel-bar {
+            height: 100%; width: 100%; background: var(--primary-grad);
+            transition: width 0.5s ease, background 0.5s ease;
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.4);
+        }
+
         .forecast-box {
-            background: rgba(52, 152, 219, 0.1); border-left: 4px solid var(--accent); padding: 15px; margin-top: 20px; margin-bottom: 5px;
-            border-radius: 8px; font-size: 0.9rem; line-height: 1.4; text-align: left; display: flex; align-items: center;
+            background: rgba(52, 152, 219, 0.1); border-left: 4px solid var(--accent);
+            padding: 15px; margin-top: 20px; margin-bottom: 5px;
+            border-radius: 8px; font-size: 0.9rem; line-height: 1.4;
+            text-align: left; display: flex; align-items: center;
         }
         .forecast-icon { font-size: 1.5rem; margin-right: 15px; }
+
         .debt-alert {
-            background: rgba(231, 76, 60, 0.2); border: 1px solid var(--danger); color: var(--danger);
-            padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px; display: none; font-weight: 800; letter-spacing: 1px; border: 1px solid rgba(231, 76, 60, 0.5);
+            background: rgba(231, 76, 60, 0.2); border: 1px solid var(--danger);
+            color: var(--danger); padding: 12px; border-radius: 8px;
+            text-align: center; margin-bottom: 20px;
+            display: none; font-weight: 800; letter-spacing: 1px;
+            border: 1px solid rgba(231, 76, 60, 0.5);
         }
 
         /* --- FIXED INPUTS & DROPDOWNS --- */
-        input, select {
+         input, select {
             width: 100%; 
-            display: block;
-            box-sizing: border-box; /* Ensures padding is included in width */
+            max-width: 100%; /* Fix overflow */
             background: rgba(0,0,0,0.3); border: 1px solid #444;
-            color: white; padding: 14px; border-radius: 12px;
-            font-size: 1.1rem; margin: 0 0 15px 0; outline: none;
+            color: white; padding: 16px; border-radius: 12px;
+            font-size: 1.1rem; margin-bottom: 15px; outline: none;
             transition: border 0.2s;
+            /* iOS Fix for Dropdowns */
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px top 50%;
+            background-size: 12px auto;
         }
         
         /* Dropdown Specific Fix */
@@ -144,9 +198,10 @@
         
         input:focus, select:focus { border-color: var(--primary); }
         input[type="date"] { color-scheme: dark; }
-        
+
         .btn {
-            width: 100%; padding: 18px; border-radius: 14px; border: none; font-size: 1rem; font-weight: 700;
+            width: 100%; padding: 18px; border-radius: 14px;
+            border: none; font-size: 1rem; font-weight: 700;
             cursor: pointer; transition: transform 0.1s; margin-bottom: 10px;
         }
         .btn:active { transform: scale(0.98); }
@@ -156,40 +211,60 @@
         .btn-small { padding: 10px; font-size: 0.9rem; margin-top: 5px; }
 
         .fab {
-            position: fixed; bottom: 90px; right: 20px; width: 65px; height: 65px; background: var(--primary-grad);
-            border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #000;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.4); z-index: 900; cursor: pointer; transition: transform 0.2s;
+            position: fixed; bottom: 90px; right: 20px;
+            width: 65px; height: 65px;
+            background: var(--primary-grad);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2rem; color: #000;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            z-index: 900; cursor: pointer;
+            transition: transform 0.2s;
         }
         .fab:active { transform: scale(0.9); }
 
         .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000;
-            display: none; align-items: flex-end; backdrop-filter: blur(5px);
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 2000;
+            display: none; align-items: flex-end; 
+            backdrop-filter: blur(5px);
         }
         .modal-content {
-            background: #1a1a24; width: 100%; border-radius: 25px 25px 0 0; padding: 30px 20px;
-            box-shadow: 0 -10px 40px rgba(0,0,0,0.5); animation: slideUp 0.3s ease-out; border-top: 1px solid #333;
-            box-sizing: border-box; /* CRITICAL FIX */
+            background: #1a1a24;
+            width: 100%; border-radius: 25px 25px 0 0; padding: 30px 20px;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+            animation: slideUp 0.3s ease-out; border-top: 1px solid #333;
         }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
         .nav-bar {
-            position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(24, 24, 29, 0.95); border-top: 1px solid #333;
-            display: flex; justify-content: space-around; padding: 15px 0; z-index: 1000; display: none; backdrop-filter: blur(10px);
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background: rgba(24, 24, 29, 0.95); 
+            border-top: 1px solid #333;
+            display: flex; justify-content: space-around;
+            padding: 15px 0; z-index: 1000;
+            display: none; backdrop-filter: blur(10px);
         }
         .nav-item { color: #666; text-align: center; font-size: 0.75rem; cursor: pointer; transition: color 0.2s; }
         .nav-item div { font-size: 1.4rem; margin-bottom: 4px; }
         .nav-item.active { color: var(--primary); font-weight: 600; }
+        
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         
-        .tx-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .tx-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
         .tx-left { flex-grow: 1; }
         .tx-date { color: var(--text-muted); font-size: 0.8rem; margin-right: 8px; }
         .tx-tag { font-size: 0.7rem; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
+        
         .list-month-header {
-            background: rgba(255,255,255,0.05); color: var(--primary); padding: 8px 12px; border-radius: 8px;
-            font-size: 0.85rem; font-weight: 700; margin-top: 20px; margin-bottom: 5px; letter-spacing: 0.5px;
+            background: rgba(255,255,255,0.05); color: var(--primary);
+            padding: 8px 12px; border-radius: 8px;
+            font-size: 0.85rem; font-weight: 700;
+            margin-top: 20px; margin-bottom: 5px; letter-spacing: 0.5px;
         }
     </style>
 </head>
@@ -740,22 +815,17 @@
             if(!appData.startDate) return 0;
             const stats = getFinancials();
             
+            // Start Date Logic
             let start = new Date(appData.startDate);
             if (appData.transactions.length > 0) {
                  const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
                  if (earliest < start) start = earliest;
             }
             
-            // Recalculate streak start to ensure it respects the transaction history
-            let streakStart = new Date(start);
-            streakStart.setHours(0,0,0,0);
-
             const endOfPeriod = new Date(stats.endOfPeriod);
-            // Effective start for allowance calculation within current period logic
-            // But streak should persist across periods. 
-            // We use a simplified daily allowance check based on current financial settings
-            
-            const dailyAllowance = stats.totalDisposable / stats.daysInMonth; // Simplify to standard daily allow
+            const totalDaysAvailable = Math.ceil((endOfPeriod - start) / (1000 * 60 * 60 * 24));
+            const safeDays = totalDaysAvailable > 0 ? totalDaysAvailable : 1;
+            const dailyAllowance = stats.totalDisposable / safeDays;
 
             const dailySpends = {};
             const getLocalKey = (d) => {
@@ -772,7 +842,7 @@
             const today = new Date();
             let virtualBalance = 0; 
             const history = [];
-            let cursor = new Date(streakStart);
+            let cursor = new Date(start);
             
             while (cursor <= today) {
                 virtualBalance += dailyAllowance;
@@ -863,8 +933,10 @@
                 const d = new Date(tx.date);
                 const monthKey = d.toLocaleString('default', { month: 'long', year: 'numeric' });
                 
+                // Filter Check
                 if (filterMonth && monthKey !== filterMonth) return;
 
+                // Month Header (Only show if NOT filtering by month, to avoid redundancy)
                 if (!filterMonth && monthKey !== lastMonthLabel) {
                     const header = document.createElement('div');
                     header.className = 'list-month-header';
@@ -900,6 +972,7 @@
                 const d = new Date(tx.date);
                 const monthKey = d.toLocaleString('default', { month: 'long', year: 'numeric' });
                 
+                // FILTER CHECK FOR DETAIL CHARTS
                 if (!filterMonth || monthKey === filterMonth) {
                     catTotals[tx.category] = (catTotals[tx.category] || 0) + tx.amount;
                     const m = tx.method || "Debit"; methodTotals[m] = (methodTotals[m] || 0) + tx.amount;
@@ -908,6 +981,7 @@
                     if(!dailyTotals[sortKey]) dailyTotals[sortKey] = { label: dateKey, val: 0 }; dailyTotals[sortKey].val += tx.amount;
                 }
 
+                // SAVINGS GROWTH (ALWAYS ALL TIME)
                 const monthShort = d.toLocaleDateString('en-GB', {month:'short', year:'2-digit'});
                 monthlySavings[monthShort] = (monthlySavings[monthShort] || 0) + tx.amount;
             });
