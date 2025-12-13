@@ -330,8 +330,12 @@
 
         <label class="text-muted">Savings Goal</label>
         <input type="number" id="inp-goal" placeholder="500">
+        
         <label class="text-muted">Goal Photo</label>
-        <input type="file" id="inp-goal-img" accept="image/*">
+        <div style="display:flex; gap:10px; margin-bottom: 15px;">
+            <input type="file" id="inp-goal-img" accept="image/*" style="margin-bottom:0;">
+            <button class="btn btn-danger" style="width: auto; padding: 0 20px; margin:0;" onclick="removeGoalImage()">✕</button>
+        </div>
         
         <div id="data-management-section" style="display:none; margin-top:20px; border-top:1px solid #333; padding-top:20px;">
             <h3 style="margin-bottom:10px;">Data Management</h3>
@@ -713,6 +717,31 @@
             });
             totalEl.innerText = total.toFixed(2);
         }
+
+function removeFixedItem(id) { tempFixedItems = tempFixedItems.filter(item => item.id !== id); renderFixedList(); }
+        function renderFixedList() {
+            const listEl = document.getElementById('fixed-list-display');
+            const totalEl = document.getElementById('calc-fixed-total');
+            listEl.innerHTML = ''; let total = 0;
+            const sym = document.getElementById('inp-currency') ? document.getElementById('inp-currency').value : (appData.currency || '£');
+            tempFixedItems.forEach(item => {
+                total += item.cost;
+                const div = document.createElement('div');
+                div.style.cssText = "display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #333; font-size:0.9rem;";
+                div.innerHTML = `<span>${item.name}: ${sym}${item.cost.toFixed(2)}</span><span onclick="removeFixedItem(${item.id})" style="color:var(--danger); cursor:pointer;">✕</span>`;
+                listEl.appendChild(div);
+            });
+            totalEl.innerText = total.toFixed(2);
+        }
+
+        // --- NEW FUNCTION START ---
+        function removeGoalImage() {
+            document.getElementById('inp-goal-img').value = ''; // Reset the input
+            appData.goalImage = null; // Clear the data
+            alert("Photo removed. Click 'Save Flight Plan' to confirm.");
+        }
+        // --- NEW FUNCTION END ---
+
 
         function saveSetup() {
             const name = document.getElementById('inp-name').value || "Captain";
