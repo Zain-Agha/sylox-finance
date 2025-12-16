@@ -1133,10 +1133,10 @@
         }
           // --- NEW: STREAK DIAGNOSTICS POPUP ---
         // --- NEW: STREAK DIAGNOSTICS MODAL ---
+        // --- NEW: STREAK DIAGNOSTICS MODAL (POLISHED) ---
         function toggleStreakModal() {
             const modal = document.getElementById('modal-streak');
             
-            // Toggle Logic: If open, close it. If closed, open it.
             if (modal.style.display === 'flex') {
                 modal.style.display = 'none';
                 return;
@@ -1146,7 +1146,7 @@
             const stats = getFinancials();
             const sym = appData.currency || '£';
 
-            // 1. Re-run Streak Math to get current numbers
+            // 1. Re-run Streak Math
             let start = new Date(appData.startDate);
             if (appData.transactions.length > 0) {
                  const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
@@ -1169,7 +1169,7 @@
                 dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
             });
 
-            // Calculate 'Virtual Balance' (The Buffer) up to Yesterday
+            // Calculate Past Buffer
             let virtualBalance = 0;
             const today = new Date();
             const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
@@ -1178,7 +1178,6 @@
             cursor.setHours(0,0,0,0);
             yesterday.setHours(0,0,0,0);
             
-            // Loop up to yesterday to find the "Brought Forward" Buffer
             while (cursor <= yesterday) {
                 virtualBalance += dailyAllowance;
                 const key = getLocalKey(cursor);
@@ -1191,58 +1190,57 @@
             const spentToday = dailySpends[todayKey] || 0;
             
             // The Math
-            // Available = (Past Buffer) + (Today's Salary)
-            const maxSpendToKeepStreak = virtualBalance + dailyAllowance + 1.0; // +1.0 is the buffer rule
+            const maxSpendToKeepStreak = virtualBalance + dailyAllowance + 1.0; 
             const remainingSafeSpend = maxSpendToKeepStreak - spentToday;
             
             // HTML Generation
             const detailsDiv = document.getElementById('streak-details');
             
             if (remainingSafeSpend >= 0) {
-                // STREAK IS ALIVE
+                // STREAK ALIVE
                 detailsDiv.innerHTML = `
-                    <div style="font-size:3rem; margin-bottom:10px;">🔥</div>
-                    <h3 style="color:var(--primary); margin-bottom:10px;">Streak Active</h3>
-                    <p style="color:#aaa; font-size:0.9rem; margin-bottom:20px;">You are flying efficiently.</p>
+                    <div class="flame-icon" style="font-size:4rem; margin-bottom:10px; display:inline-block;">🔥</div>
+                    <h2 style="color:var(--primary); margin:0;">Streak Active</h2>
+                    <p style="color:#aaa; font-size:0.9rem; margin-top:5px; margin-bottom:20px;">You are flying efficiently.</p>
                     
-                    <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:left; margin-bottom:10px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <span class="text-muted">Safety Buffer (Past):</span>
-                            <span>${sym}${virtualBalance.toFixed(2)}</span>
+                    <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:16px; text-align:left; margin-bottom:15px; border:1px solid rgba(255,255,255,0.1);">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.95rem;">
+                            <span class="text-muted">Safety Buffer (Past)</span>
+                            <span style="font-weight:bold;">${sym}${virtualBalance.toFixed(2)}</span>
                         </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid #444; padding-bottom:8px;">
-                            <span class="text-muted">Today's Allowance:</span>
-                            <span>${sym}${dailyAllowance.toFixed(2)}</span>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:15px; font-size:0.95rem;">
+                            <span class="text-muted">Today's Allowance</span>
+                            <span style="font-weight:bold;">${sym}${dailyAllowance.toFixed(2)}</span>
                         </div>
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:1.1rem;">
-                            <span>Max Spend Limit:</span>
+                        <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.2rem;">
+                            <span>Max Spend Limit</span>
                             <span style="color:var(--primary);">${sym}${maxSpendToKeepStreak.toFixed(2)}</span>
                         </div>
                     </div>
                     
-                    <p style="font-size:0.9rem; line-height:1.5;">
+                    <p style="font-size:0.9rem; line-height:1.6; color:#ccc;">
                         You have spent <strong>${sym}${spentToday.toFixed(2)}</strong> today.<br>
-                        Stay under <span style="color:var(--primary); font-weight:bold;">${sym}${maxSpendToKeepStreak.toFixed(2)}</span> total to keep the fire burning.
+                        Stay under <span style="color:var(--primary); font-weight:bold;">${sym}${maxSpendToKeepStreak.toFixed(2)}</span> to keep the fire burning.
                     </p>
                 `;
             } else {
-                // STREAK IS BROKEN
+                // STREAK BROKEN
                 detailsDiv.innerHTML = `
-                    <div style="font-size:3rem; margin-bottom:10px;">🧊</div>
-                    <h3 style="color:var(--danger); margin-bottom:10px;">Streak Broken</h3>
-                    <p style="color:#aaa; font-size:0.9rem; margin-bottom:20px;">You exceeded your flight envelope.</p>
+                    <div style="font-size:4rem; margin-bottom:10px;">🧊</div>
+                    <h2 style="color:var(--danger); margin:0;">Streak Broken</h2>
+                    <p style="color:#aaa; font-size:0.9rem; margin-top:5px; margin-bottom:20px;">You exceeded your flight envelope.</p>
                     
-                     <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:left; margin-bottom:10px;">
+                     <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:16px; text-align:left; margin-bottom:15px; border:1px solid rgba(255,255,255,0.1);">
                         <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <span class="text-muted">Max Limit (Buffer+Daily):</span>
+                            <span class="text-muted">Max Limit (Buffer+Daily)</span>
                             <span>${sym}${maxSpendToKeepStreak.toFixed(2)}</span>
                         </div>
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:1.1rem;">
-                            <span>You Spent:</span>
+                        <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.2rem;">
+                            <span>You Spent</span>
                             <span style="color:var(--danger);">${sym}${spentToday.toFixed(2)}</span>
                         </div>
                     </div>
-                    <p style="font-size:0.9rem;">Start fresh tomorrow. Consistency is key.</p>
+                    <p style="font-size:0.9rem; color:#aaa;">Start fresh tomorrow. Consistency is key.</p>
                 `;
             }
 
