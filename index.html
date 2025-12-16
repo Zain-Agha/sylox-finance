@@ -520,9 +520,90 @@
 
         function initApp() {
             document.getElementById('nav-bar').style.display = 'flex';
+            document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
             switchScreen('screen-home');
-            updateUI();
+            updateUI(); // Forces immediate refresh of all data and images
         }
+
+        // --- FIXED SAVE SETUP LOGIC ---
+        function saveSetup() {
+            const name = document.getElementById('inp-name').value || "Captain";
+            const payMode = document.getElementById('inp-payday-mode').value;
+            const payVal = parseInt(document.getElementById('inp-payday-date').value) || 1;
+            const cur = document.getElementById('inp-currency').value || "£";
+            const income = parseFloat(document.getElementById('inp-income').value) || 0;
+            const goal = parseFloat(document.getElementById('inp-goal').value) || 0;
+            const fileInput = document.getElementById('inp-goal-img');
+
+            if (income === 0) { alert("Income is required."); return; }
+
+            // Calculate Total Fixed
+            let totalFixed = tempFixedItems.reduce((sum, item) => sum + item.cost, 0);
+
+            // Update State
+            appData.username = name;
+            appData.payDayMode = payMode;
+            appData.payDayVal = payVal;
+            appData.currency = cur;
+            appData.income = income;
+            appData.fixed = totalFixed;
+            appData.fixedItems = tempFixedItems;
+            appData.goal = goal;
+
+            // HANDLE IMAGE WITH SAFETY CHECKS
+            if (fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
+                
+                // Check Size (Limit to ~2.5MB to prevent LocalStorage crash)
+                if (file.size > 2500000) {
+                    alert("Image is too large (Over 2.5MB). Please choose a smaller photo or take a screenshot of it.");
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    appData.goalImage = e.target.result;
+                    finalizeSetup();
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // Keep existing image if no new one selected
+                finalizeSetup();
+            }
+        }
+
+        function finalizeSetup() {
+            try {
+                localStorage.setItem('pilotData', JSON.stringify(appData));
+                
+                // Force UI Update explicitly
+                initApp();
+                
+                // If we are currently on the setup screen, this ensures we move away
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.getElementById('screen-home').classList.add('active');
+                
+                updateUI(); // Run update again just to be safe
+                
+            } catch (e) {
+                // Catch "Quota Exceeded" error
+                if (e.name === 'QuotaExceededError') {
+                    alert("Storage Full! The image is too big to save. Please remove the image or choose a smaller one.");
+                } else {
+                    alert("Error saving data: " + e.message);
+                }
+            }
+        }
+
+        // --- NEW: REMOVE IMAGE FUNCTION ---
+        function removeGoalImage() {
+            document.getElementById('inp-goal-img').value = ''; 
+            appData.goalImage = null;
+            alert("Photo removed. Click 'Save Flight Plan' to confirm.");
+        }
+
+        // ... [REST OF YOUR EXISTING FUNCTIONS BELOW: toggleModal, togglePaydayInput, goToPlan, etc.] ...
+        // ... (You don't need to change the rest, just ensure the two functions above are replaced) ...
 
         function toggleModal(show) {
             const modal = document.getElementById('modal-log');
@@ -580,7 +661,6 @@
             }
         }
 
-        // --- DASHBOARD CONTROLLER ---
         function updateHistoryDropdown() {
             const selector = document.getElementById('history-month-selector');
             const currentSelection = selector.value;
@@ -718,52 +798,6 @@
             totalEl.innerText = total.toFixed(2);
         }
 
-function removeFixedItem(id) { tempFixedItems = tempFixedItems.filter(item => item.id !== id); renderFixedList(); }
-        function renderFixedList() {
-            const listEl = document.getElementById('fixed-list-display');
-            const totalEl = document.getElementById('calc-fixed-total');
-            listEl.innerHTML = ''; let total = 0;
-            const sym = document.getElementById('inp-currency') ? document.getElementById('inp-currency').value : (appData.currency || '£');
-            tempFixedItems.forEach(item => {
-                total += item.cost;
-                const div = document.createElement('div');
-                div.style.cssText = "display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #333; font-size:0.9rem;";
-                div.innerHTML = `<span>${item.name}: ${sym}${item.cost.toFixed(2)}</span><span onclick="removeFixedItem(${item.id})" style="color:var(--danger); cursor:pointer;">✕</span>`;
-                listEl.appendChild(div);
-            });
-            totalEl.innerText = total.toFixed(2);
-        }
-
-        // --- NEW FUNCTION START ---
-        function removeGoalImage() {
-            document.getElementById('inp-goal-img').value = ''; // Reset the input
-            appData.goalImage = null; // Clear the data
-            alert("Photo removed. Click 'Save Flight Plan' to confirm.");
-        }
-        // --- NEW FUNCTION END ---
-
-
-        function saveSetup() {
-            const name = document.getElementById('inp-name').value || "Captain";
-            const payMode = document.getElementById('inp-payday-mode').value;
-            const payVal = parseInt(document.getElementById('inp-payday-date').value) || 1;
-            const cur = document.getElementById('inp-currency').value || "£";
-            const income = parseFloat(document.getElementById('inp-income').value) || 0;
-            const goal = parseFloat(document.getElementById('inp-goal').value) || 0;
-            const fileInput = document.getElementById('inp-goal-img');
-            if (income === 0) { alert("Income is required."); return; }
-            let totalFixed = tempFixedItems.reduce((sum, item) => sum + item.cost, 0);
-            appData.username = name; appData.payDayMode = payMode; appData.payDayVal = payVal;
-            appData.currency = cur;
-            appData.income = income; appData.fixed = totalFixed; appData.fixedItems = tempFixedItems; appData.goal = goal;
-            if (fileInput.files && fileInput.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) { appData.goalImage = e.target.result; finalizeSetup(); };
-                reader.readAsDataURL(fileInput.files[0]);
-            } else { finalizeSetup(); }
-        }
-        function finalizeSetup() { localStorage.setItem('pilotData', JSON.stringify(appData)); initApp(); }
-
         function addTransaction() {
             const amt = parseFloat(document.getElementById('tx-amount').value);
             const desc = document.getElementById('tx-desc').value || "Unknown";
@@ -854,7 +888,6 @@ function removeFixedItem(id) { tempFixedItems = tempFixedItems.filter(item => it
             if(!appData.startDate) return 0;
             const stats = getFinancials();
             
-            // Start Date Logic
             let start = new Date(appData.startDate);
             if (appData.transactions.length > 0) {
                  const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
@@ -866,11 +899,9 @@ function removeFixedItem(id) { tempFixedItems = tempFixedItems.filter(item => it
             streakStart.setHours(0,0,0,0);
 
             const endOfPeriod = new Date(stats.endOfPeriod);
-            // Effective start for allowance calculation within current period logic
-            // But streak should persist across periods. 
-            // We use a simplified daily allowance check based on current financial settings
-            
-            const dailyAllowance = stats.totalDisposable / stats.daysInMonth; // Simplify to standard daily allow
+            const totalDaysAvailable = Math.ceil((endOfPeriod - start) / (1000 * 60 * 60 * 24));
+            const safeDays = totalDaysAvailable > 0 ? totalDaysAvailable : 1;
+            const dailyAllowance = stats.totalDisposable / safeDays;
 
             const dailySpends = {};
             const getLocalKey = (d) => {
