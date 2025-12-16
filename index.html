@@ -371,7 +371,7 @@
         <div style="text-align: center; margin-bottom: 20px; margin-top: 60px;">
             <p class="text-muted" style="margin-bottom:5px;">Welcome back,</p>
             <!-- STREAK (Now Clickable) -->
-            <div id="streak-badge" class="streak-container" onclick="showStreakInfo()" style="cursor: pointer;">
+            <div id="streak-badge" class="streak-container" onclick="toggleStreakModal()" style="cursor: pointer;">
                 <div class="flame-icon">🔥</div><span id="streak-count">1 Day Streak</span>
             </div>
             <h2 id="greeting-display" style="margin-bottom: 15px;">Captain</h2>
@@ -490,6 +490,22 @@
         <div class="nav-item" onclick="initApp()"><div>🧭</div>Today</div>
         <div class="nav-item" onclick="goToPlan()"><div>⚙️</div>Plan</div>
         <div class="nav-item" onclick="switchScreen('screen-history')"><div>📜</div>Log</div>
+    </div>
+
+<!-- NEW: STREAK INFO MODAL -->
+    <div id="modal-streak" class="modal-overlay" onclick="if(event.target === this) toggleStreakModal()">
+        <div class="modal-content" style="text-align: center;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2>Streak Status</h2>
+                <span onclick="toggleStreakModal()" style="font-size:1.5rem; color:#666; cursor:pointer;">✕</span>
+            </div>
+            
+            <div id="streak-details">
+                <!-- Content injected by JS -->
+            </div>
+
+            <button class="btn btn-secondary" onclick="toggleStreakModal()" style="margin-top:20px;">Close</button>
+        </div>
     </div>
 
     <script>
@@ -885,54 +901,84 @@
         }
 
         // --- STREAK LOGIC ---
+        // --- STREAK LOGIC (UNIVERSAL LOCAL TIME) ---
         function calculateStreak() {
             if(!appData.startDate) return 0;
             const stats = getFinancials();
             
+            // Helper: Generate a "YYYY-MM-DD" string based on the PHONE'S local clock.
+            // This ensures 11pm counts as Today, and 12:01am counts as Tomorrow.
+            const getLocalKey = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            // 1. Determine Start Date
             let start = new Date(appData.startDate);
             if (appData.transactions.length > 0) {
+                 // Scan for the earliest transaction date
                  const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
                  if (earliest < start) start = earliest;
             }
             
-            // Recalculate streak start to ensure it respects the transaction history
-            let streakStart = new Date(start);
-            streakStart.setHours(0,0,0,0);
-
+            // 2. Calculate Daily Allowance
             const endOfPeriod = new Date(stats.endOfPeriod);
+            // Calculate total days in this specific user's active period
             const totalDaysAvailable = Math.ceil((endOfPeriod - start) / (1000 * 60 * 60 * 24));
             const safeDays = totalDaysAvailable > 0 ? totalDaysAvailable : 1;
             const dailyAllowance = stats.totalDisposable / safeDays;
 
+            // 3. Map Spending using LOCAL KEYS
             const dailySpends = {};
-            const getLocalKey = (d) => {
-                return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-            };
-
             appData.transactions.forEach(tx => {
                 const d = new Date(tx.date);
-                const key = getLocalKey(d);
+                const key = getLocalKey(d); // Uses local phone time
                 dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
             });
 
+            // 4. Replay History
             let streak = 0;
-            const today = new Date();
+            const today = new Date(); 
+            
             let virtualBalance = 0; 
             const history = [];
-            let cursor = new Date(streakStart);
             
-            while (cursor <= today) {
+            // Loop from Start Date to Today
+            // Set time to 00:00:00 to iterate safely through calendar days
+            let cursor = new Date(start);
+            cursor.setHours(0,0,0,0);
+            
+            const todayMidnight = new Date(today);
+            todayMidnight.setHours(0,0,0,0);
+            
+            while (cursor <= todayMidnight) {
                 virtualBalance += dailyAllowance;
+                
                 const key = getLocalKey(cursor);
                 const spent = dailySpends[key] || 0;
+                
                 virtualBalance -= spent;
-                if (virtualBalance >= -1.0) history.push(true); else history.push(false);
+                
+                // STRICT CHECK:
+                // If accumulated balance drops below -1.00 (buffer), streak breaks.
+                if (virtualBalance >= -1.0) {
+                    history.push(true); 
+                } else {
+                    history.push(false); 
+                }
+                
+                // Move to next day
                 cursor.setDate(cursor.getDate() + 1);
             }
 
+            // 5. Count the Streak (Backwards from today)
             for (let i = history.length - 1; i >= 0; i--) {
-                if (history[i] === true) streak++; else break; 
+                if (history[i] === true) streak++; 
+                else break; 
             }
+            
             return streak;
         }
 
@@ -1086,59 +1132,121 @@
             methodChartInstance = new Chart(ctxMethod, { type: 'pie', data: { labels: Object.keys(methodTotals), datasets: [{ data: Object.values(methodTotals), backgroundColor: ['#2ecc71', '#f1c40f', '#e74c3c'], borderWidth: 0 }] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } });
         }
           // --- NEW: STREAK DIAGNOSTICS POPUP ---
-        function showStreakInfo() {
+        // --- NEW: STREAK DIAGNOSTICS MODAL ---
+        function toggleStreakModal() {
+            const modal = document.getElementById('modal-streak');
+            
+            // Toggle Logic: If open, close it. If closed, open it.
+            if (modal.style.display === 'flex') {
+                modal.style.display = 'none';
+                return;
+            }
+
             if(!appData.startDate) return;
             const stats = getFinancials();
             const sym = appData.currency || '£';
 
-            // 1. Determine Start Date (Same logic as calculateStreak)
+            // 1. Re-run Streak Math to get current numbers
             let start = new Date(appData.startDate);
             if (appData.transactions.length > 0) {
                  const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
                  if (earliest < start) start = earliest;
             }
-            // Normalize to midnight
-            start.setHours(0,0,0,0);
-            const now = new Date();
-            now.setHours(0,0,0,0);
-
-            // 2. Calculate Days Active
-            const diffTime = Math.abs(now - start);
-            const daysActive = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-            // 3. Calculate Daily Allowance (The "Salary")
-            // Note: This must match calculateStreak's denominator logic
-            let effectiveDaysInMonth = stats.daysInMonth;
-            if (start > stats.startOfPeriod) { effectiveDaysInMonth = stats.daysInMonth; }
-            const dailyAllowance = stats.totalDisposable / effectiveDaysInMonth;
-
-            // 4. Calculate Totals
-            const totalBudget = dailyAllowance * daysActive;
             
-            let totalSpent = 0;
+            const endOfPeriod = new Date(stats.endOfPeriod);
+            const totalDaysAvailable = Math.ceil((endOfPeriod - start) / (1000 * 60 * 60 * 24));
+            const safeDays = totalDaysAvailable > 0 ? totalDaysAvailable : 1;
+            const dailyAllowance = stats.totalDisposable / safeDays;
+
+            const getLocalKey = (d) => {
+                return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+            };
+
+            const dailySpends = {};
             appData.transactions.forEach(tx => {
-                const d = new Date(tx.date); d.setHours(0,0,0,0);
-                if (d >= start && d <= now) {
-                    totalSpent += tx.amount;
-                }
+                const d = new Date(tx.date);
+                const key = getLocalKey(d);
+                dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
             });
 
-            const buffer = totalBudget - totalSpent;
-            const status = buffer >= -1.0 ? "🔥 ACTIVE" : "🧊 FROZEN";
-            const advice = buffer >= 0 
-                ? "You are ahead of schedule. Your streak is safe." 
-                : "You are dipping into your safety buffer.";
+            // Calculate 'Virtual Balance' (The Buffer) up to Yesterday
+            let virtualBalance = 0;
+            const today = new Date();
+            const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+            
+            let cursor = new Date(start);
+            cursor.setHours(0,0,0,0);
+            yesterday.setHours(0,0,0,0);
+            
+            // Loop up to yesterday to find the "Brought Forward" Buffer
+            while (cursor <= yesterday) {
+                virtualBalance += dailyAllowance;
+                const key = getLocalKey(cursor);
+                virtualBalance -= (dailySpends[key] || 0);
+                cursor.setDate(cursor.getDate() + 1);
+            }
 
-            // 5. Show Popup
-            alert(`STREAK DIAGNOSTICS\n\n` +
-                  `⏱️ Flight Time: ${daysActive} Days\n` +
-                  `💰 Budget Allowed: ${sym}${totalBudget.toFixed(2)}\n` +
-                  `💸 Total Spent: ${sym}${totalSpent.toFixed(2)}\n` +
-                  `-----------------------------\n` +
-                  `🛡️ SAFETY BUFFER: ${sym}${buffer.toFixed(2)}\n` +
-                  `-----------------------------\n` +
-                  `Status: ${status}\n` +
-                  `${advice}`);
+            // Today's Data
+            const todayKey = getLocalKey(today);
+            const spentToday = dailySpends[todayKey] || 0;
+            
+            // The Math
+            // Available = (Past Buffer) + (Today's Salary)
+            const maxSpendToKeepStreak = virtualBalance + dailyAllowance + 1.0; // +1.0 is the buffer rule
+            const remainingSafeSpend = maxSpendToKeepStreak - spentToday;
+            
+            // HTML Generation
+            const detailsDiv = document.getElementById('streak-details');
+            
+            if (remainingSafeSpend >= 0) {
+                // STREAK IS ALIVE
+                detailsDiv.innerHTML = `
+                    <div style="font-size:3rem; margin-bottom:10px;">🔥</div>
+                    <h3 style="color:var(--primary); margin-bottom:10px;">Streak Active</h3>
+                    <p style="color:#aaa; font-size:0.9rem; margin-bottom:20px;">You are flying efficiently.</p>
+                    
+                    <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:left; margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                            <span class="text-muted">Safety Buffer (Past):</span>
+                            <span>${sym}${virtualBalance.toFixed(2)}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid #444; padding-bottom:8px;">
+                            <span class="text-muted">Today's Allowance:</span>
+                            <span>${sym}${dailyAllowance.toFixed(2)}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:1.1rem;">
+                            <span>Max Spend Limit:</span>
+                            <span style="color:var(--primary);">${sym}${maxSpendToKeepStreak.toFixed(2)}</span>
+                        </div>
+                    </div>
+                    
+                    <p style="font-size:0.9rem; line-height:1.5;">
+                        You have spent <strong>${sym}${spentToday.toFixed(2)}</strong> today.<br>
+                        Stay under <span style="color:var(--primary); font-weight:bold;">${sym}${maxSpendToKeepStreak.toFixed(2)}</span> total to keep the fire burning.
+                    </p>
+                `;
+            } else {
+                // STREAK IS BROKEN
+                detailsDiv.innerHTML = `
+                    <div style="font-size:3rem; margin-bottom:10px;">🧊</div>
+                    <h3 style="color:var(--danger); margin-bottom:10px;">Streak Broken</h3>
+                    <p style="color:#aaa; font-size:0.9rem; margin-bottom:20px;">You exceeded your flight envelope.</p>
+                    
+                     <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:left; margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                            <span class="text-muted">Max Limit (Buffer+Daily):</span>
+                            <span>${sym}${maxSpendToKeepStreak.toFixed(2)}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:1.1rem;">
+                            <span>You Spent:</span>
+                            <span style="color:var(--danger);">${sym}${spentToday.toFixed(2)}</span>
+                        </div>
+                    </div>
+                    <p style="font-size:0.9rem;">Start fresh tomorrow. Consistency is key.</p>
+                `;
+            }
+
+            modal.style.display = 'flex';
         }
 
 
