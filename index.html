@@ -370,7 +370,8 @@
         
         <div style="text-align: center; margin-bottom: 20px; margin-top: 60px;">
             <p class="text-muted" style="margin-bottom:5px;">Welcome back,</p>
-            <div id="streak-badge" class="streak-container">
+            <!-- STREAK (Now Clickable) -->
+            <div id="streak-badge" class="streak-container" onclick="showStreakInfo()" style="cursor: pointer;">
                 <div class="flame-icon">🔥</div><span id="streak-count">1 Day Streak</span>
             </div>
             <h2 id="greeting-display" style="margin-bottom: 15px;">Captain</h2>
@@ -1084,6 +1085,63 @@
             if(methodChartInstance) methodChartInstance.destroy();
             methodChartInstance = new Chart(ctxMethod, { type: 'pie', data: { labels: Object.keys(methodTotals), datasets: [{ data: Object.values(methodTotals), backgroundColor: ['#2ecc71', '#f1c40f', '#e74c3c'], borderWidth: 0 }] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } });
         }
+          // --- NEW: STREAK DIAGNOSTICS POPUP ---
+        function showStreakInfo() {
+            if(!appData.startDate) return;
+            const stats = getFinancials();
+            const sym = appData.currency || '£';
+
+            // 1. Determine Start Date (Same logic as calculateStreak)
+            let start = new Date(appData.startDate);
+            if (appData.transactions.length > 0) {
+                 const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
+                 if (earliest < start) start = earliest;
+            }
+            // Normalize to midnight
+            start.setHours(0,0,0,0);
+            const now = new Date();
+            now.setHours(0,0,0,0);
+
+            // 2. Calculate Days Active
+            const diffTime = Math.abs(now - start);
+            const daysActive = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+            // 3. Calculate Daily Allowance (The "Salary")
+            // Note: This must match calculateStreak's denominator logic
+            let effectiveDaysInMonth = stats.daysInMonth;
+            if (start > stats.startOfPeriod) { effectiveDaysInMonth = stats.daysInMonth; }
+            const dailyAllowance = stats.totalDisposable / effectiveDaysInMonth;
+
+            // 4. Calculate Totals
+            const totalBudget = dailyAllowance * daysActive;
+            
+            let totalSpent = 0;
+            appData.transactions.forEach(tx => {
+                const d = new Date(tx.date); d.setHours(0,0,0,0);
+                if (d >= start && d <= now) {
+                    totalSpent += tx.amount;
+                }
+            });
+
+            const buffer = totalBudget - totalSpent;
+            const status = buffer >= -1.0 ? "🔥 ACTIVE" : "🧊 FROZEN";
+            const advice = buffer >= 0 
+                ? "You are ahead of schedule. Your streak is safe." 
+                : "You are dipping into your safety buffer.";
+
+            // 5. Show Popup
+            alert(`STREAK DIAGNOSTICS\n\n` +
+                  `⏱️ Flight Time: ${daysActive} Days\n` +
+                  `💰 Budget Allowed: ${sym}${totalBudget.toFixed(2)}\n` +
+                  `💸 Total Spent: ${sym}${totalSpent.toFixed(2)}\n` +
+                  `-----------------------------\n` +
+                  `🛡️ SAFETY BUFFER: ${sym}${buffer.toFixed(2)}\n` +
+                  `-----------------------------\n` +
+                  `Status: ${status}\n` +
+                  `${advice}`);
+        }
+
+
         function clearAllData() { if(confirm("Factory Reset?")) { localStorage.removeItem('pilotData'); location.reload(); } }
     </script>
 </body>
