@@ -685,7 +685,9 @@
             const months = new Set();
             appData.transactions.forEach(tx => {
                 const d = new Date(tx.date);
-                const key = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+                const cycle = getCycleInfo(d);
+                const key = cycle.label; 
+                months.add(key);
                 months.add(key);
             });
             Array.from(months).forEach(m => {
@@ -712,7 +714,8 @@
             
             appData.transactions.forEach(tx => {
                 const d = new Date(tx.date);
-                const key = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+                const cycle = getCycleInfo(d);
+                 const key = cycle.label;
                 if(key === selectedMonth) {
                     monthlySpend += tx.amount;
                     catBreakdown[tx.category] = (catBreakdown[tx.category] || 0) + tx.amount;
@@ -846,6 +849,42 @@
                 updateUI();
             }
         }
+
+// --- NEW: CYCLE HELPER ---
+function getCycleInfo(dateObj) {
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth(); // 0-11
+    
+    // Calculate the Payday for this specific calendar month
+    // (Uses your existing Payday Mode/Val from appData)
+    const paydayThisMonth = getPayDateForMonth(year, month, appData.payDayMode, appData.payDayVal);
+    
+    // Set boundaries to midnight for fair comparison
+    const checkDate = new Date(dateObj); checkDate.setHours(0,0,0,0);
+    const checkPay = new Date(paydayThisMonth); checkPay.setHours(0,0,0,0);
+
+    let cycleMonth, cycleYear;
+
+    if (checkDate >= checkPay) {
+        // It's after payday -> belongs to NEXT month's cycle
+        cycleMonth = month + 1;
+        cycleYear = year;
+        if (cycleMonth > 11) { cycleMonth = 0; cycleYear++; }
+    } else {
+        // It's before payday -> belongs to THIS month's cycle (spending prev salary)
+        // (Visual preference: You usually want to name the cycle by the month you are spending IN. 
+        // e.g., Dec 1 - Dec 24 is the "December Cycle")
+        cycleMonth = month;
+        cycleYear = year;
+    }
+
+    // Create Label (e.g., "Dec 2025") and Sort Key (e.g., "2025-12")
+    const dateForLabel = new Date(cycleYear, cycleMonth, 1);
+    const label = dateForLabel.toLocaleString('default', { month: 'short', year: '2-digit' }); 
+    // You can change 'short' to 'long' if you prefer "December 2025"
+    
+    return { label: label + " Cycle", sortKey: `${cycleYear}-${String(cycleMonth+1).padStart(2,'0')}` };
+}
 
         function getFinancials() {
             const now = new Date();
@@ -1054,7 +1093,8 @@
                 if (count >= limit) return;
                 
                 const d = new Date(tx.date);
-                const monthKey = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+                const cycle = getCycleInfo(d);
+                const monthKey = cycle.label;
                 
                 // Filter Check
                 if (filterMonth && monthKey !== filterMonth) return;
@@ -1087,49 +1127,138 @@
         }
 
         // --- RENDER CHARTS (WITH FILTERING) ---
+        // --- RENDER CHARTS (FIXED: CYCLE LABELS & FILTERING) ---
         function renderCharts(filterMonth = null) {
             if(!document.getElementById('screen-history').classList.contains('active')) return;
-            const catTotals = {}; const methodTotals = { "Debit": 0, "Cash": 0, "Credit": 0 }; const dailyTotals = {}; const monthlySavings = {};
+            
+            const catTotals = {}; 
+            const methodTotals = { "Debit": 0, "Cash": 0, "Credit": 0 }; 
+            const dailyTotals = {}; 
+            const monthlySavings = {};
             
             appData.transactions.forEach(tx => { 
                 const d = new Date(tx.date);
-                const monthKey = d.toLocaleString('default', { month: 'long', year: 'numeric' });
                 
-                // FILTER CHECK FOR DETAIL CHARTS
+                // 1. USE CYCLE HELPER FOR CONSISTENT LABELS
+                const cycle = getCycleInfo(d);
+                const monthKey = cycle.label;
+                
+                // 2. APPLY FILTER TO ALL CHARTS (Including Savings)
                 if (!filterMonth || monthKey === filterMonth) {
+                    
+                    // A. Data for Details Charts
                     catTotals[tx.category] = (catTotals[tx.category] || 0) + tx.amount;
-                    const m = tx.method || "Debit"; methodTotals[m] = (methodTotals[m] || 0) + tx.amount;
-                    const dateKey = new Date(tx.date).toLocaleDateString('en-GB', {day:'numeric', month:'short'});
-                    const sortKey = new Date(tx.date).toISOString().split('T')[0]; 
-                    if(!dailyTotals[sortKey]) dailyTotals[sortKey] = { label: dateKey, val: 0 }; dailyTotals[sortKey].val += tx.amount;
-                }
+                    const m = tx.method || "Debit"; 
+                    methodTotals[m] = (methodTotals[m] || 0) + tx.amount;
+                    
+                    // B. Data for Trend Chart
+                    const dateKey = d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+                    const sortKey = d.toISOString().split('T')[0]; 
+                    if(!dailyTotals[sortKey]) dailyTotals[sortKey] = { label: dateKey, val: 0 }; 
+                    dailyTotals[sortKey].val += tx.amount;
 
-                // SAVINGS GROWTH (ALWAYS ALL TIME)
-                const monthShort = d.toLocaleDateString('en-GB', {month:'short', year:'2-digit'});
-                monthlySavings[monthShort] = (monthlySavings[monthShort] || 0) + tx.amount;
+                    // C. Data for Savings Chart
+                    monthlySavings[monthKey] = (monthlySavings[monthKey] || 0) + tx.amount;
+                }
             });
             
             const hasData = Object.keys(catTotals).length > 0;
             const disposableBase = appData.income - appData.fixed;
+
+            // --- SAVINGS CHART (FIXED X-AXIS) ---
             const savingsLabels = Object.keys(monthlySavings).reverse();
-            const savingsData = savingsLabels.map(month => { const spent = monthlySavings[month]; return disposableBase - spent; });
+            const savingsData = savingsLabels.map(month => { 
+                const spent = monthlySavings[month]; 
+                return disposableBase - spent; 
+            });
+
+            // If filtering, we might have no data if no spend, but we still want to show the potential savings
+            if (filterMonth && savingsLabels.length === 0) {
+                savingsLabels.push(filterMonth);
+                savingsData.push(disposableBase);
+            }
 
             const ctxSavings = document.getElementById('savingsChart').getContext('2d');
             if(savingsChartInstance) savingsChartInstance.destroy();
-            savingsChartInstance = new Chart(ctxSavings, { type: 'bar', data: { labels: savingsLabels.length>0?savingsLabels:['This Month'], datasets: [{ label: 'Total Saved', data: savingsLabels.length>0?savingsData:[disposableBase], backgroundColor: '#2ecc71', borderRadius: 4 }] }, options: { maintainAspectRatio: false, scales: { y: { grid: { color: '#333' } }, x: { grid: { display: false } } } } });
+            savingsChartInstance = new Chart(ctxSavings, { 
+                type: 'bar', 
+                data: { 
+                    labels: savingsLabels.length > 0 ? savingsLabels : ['No Data'], 
+                    datasets: [{ 
+                        label: 'Total Saved', 
+                        data: savingsLabels.length > 0 ? savingsData : [0], 
+                        backgroundColor: '#2ecc71', 
+                        borderRadius: 4 
+                    }] 
+                }, 
+                options: { 
+                    maintainAspectRatio: false, 
+                    scales: { 
+                        y: { grid: { color: '#333' } }, 
+                        x: { grid: { display: false } } 
+                    } 
+                } 
+            });
 
+            // --- DONUT CHART ---
             const ctxDonut = document.getElementById('donutChart').getContext('2d');
             if(donutChartInstance) donutChartInstance.destroy();
-            donutChartInstance = new Chart(ctxDonut, { type: 'doughnut', data: { labels: hasData ? Object.keys(catTotals) : ['Empty'], datasets: [{ data: hasData ? Object.values(catTotals) : [1], backgroundColor: hasData ? ['#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#e74c3c', '#e67e22', '#95a5a6', '#ffffff'] : ['#333'], borderWidth: 0 }] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } });
+            donutChartInstance = new Chart(ctxDonut, { 
+                type: 'doughnut', 
+                data: { 
+                    labels: hasData ? Object.keys(catTotals) : ['Empty'], 
+                    datasets: [{ 
+                        data: hasData ? Object.values(catTotals) : [1], 
+                        backgroundColor: hasData ? ['#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#e74c3c', '#e67e22', '#95a5a6', '#ffffff'] : ['#333'], 
+                        borderWidth: 0 
+                    }] 
+                }, 
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } 
+            });
 
+            // --- TREND CHART ---
             const ctxTrend = document.getElementById('trendChart').getContext('2d');
             if(trendChartInstance) trendChartInstance.destroy();
-            const sortedKeys = Object.keys(dailyTotals).sort(); const trendLabels = sortedKeys.map(k => dailyTotals[k].label); const trendData = sortedKeys.map(k => dailyTotals[k].val);
-            trendChartInstance = new Chart(ctxTrend, { type: 'line', data: { labels: trendLabels.length>0?trendLabels:['Today'], datasets: [{ label: 'Spend', data: trendData.length>0?trendData:[0], borderColor: '#2ecc71', tension: 0.4 }] }, options: { maintainAspectRatio: false, scales: { y: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } }, x: { ticks: { color: '#a0a0a0' }, grid: { display: false } } }, plugins: { legend: { display: false } } } });
+            const sortedKeys = Object.keys(dailyTotals).sort(); 
+            const trendLabels = sortedKeys.map(k => dailyTotals[k].label); 
+            const trendData = sortedKeys.map(k => dailyTotals[k].val);
+            
+            trendChartInstance = new Chart(ctxTrend, { 
+                type: 'line', 
+                data: { 
+                    labels: trendLabels.length > 0 ? trendLabels : ['Today'], 
+                    datasets: [{ 
+                        label: 'Spend', 
+                        data: trendData.length > 0 ? trendData : [0], 
+                        borderColor: '#2ecc71', 
+                        tension: 0.4 
+                    }] 
+                }, 
+                options: { 
+                    maintainAspectRatio: false, 
+                    scales: { 
+                        y: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } }, 
+                        x: { ticks: { color: '#a0a0a0' }, grid: { display: false } } 
+                    }, 
+                    plugins: { legend: { display: false } } 
+                } 
+            });
 
+            // --- METHOD CHART ---
             const ctxMethod = document.getElementById('methodChart').getContext('2d');
             if(methodChartInstance) methodChartInstance.destroy();
-            methodChartInstance = new Chart(ctxMethod, { type: 'pie', data: { labels: Object.keys(methodTotals), datasets: [{ data: Object.values(methodTotals), backgroundColor: ['#2ecc71', '#f1c40f', '#e74c3c'], borderWidth: 0 }] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } });
+            methodChartInstance = new Chart(ctxMethod, { 
+                type: 'pie', 
+                data: { 
+                    labels: Object.keys(methodTotals), 
+                    datasets: [{ 
+                        data: Object.values(methodTotals), 
+                        backgroundColor: ['#2ecc71', '#f1c40f', '#e74c3c'], 
+                        borderWidth: 0 
+                    }] 
+                }, 
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } 
+            });
         }
           // --- NEW: STREAK DIAGNOSTICS POPUP ---
         // --- NEW: STREAK DIAGNOSTICS MODAL ---
