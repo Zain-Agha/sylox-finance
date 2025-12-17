@@ -850,41 +850,51 @@
             }
         }
 
-// --- NEW: CYCLE HELPER ---
-function getCycleInfo(dateObj) {
-    const year = dateObj.getFullYear();
-    const month = dateObj.getMonth(); // 0-11
-    
-    // Calculate the Payday for this specific calendar month
-    // (Uses your existing Payday Mode/Val from appData)
-    const paydayThisMonth = getPayDateForMonth(year, month, appData.payDayMode, appData.payDayVal);
-    
-    // Set boundaries to midnight for fair comparison
-    const checkDate = new Date(dateObj); checkDate.setHours(0,0,0,0);
-    const checkPay = new Date(paydayThisMonth); checkPay.setHours(0,0,0,0);
+// --- CYCLE HELPER (FIXED: 15th RULE) ---
+        function getCycleInfo(dateObj) {
+            const year = dateObj.getFullYear();
+            const month = dateObj.getMonth();
+            
+            const paydayThisMonth = getPayDateForMonth(year, month, appData.payDayMode, appData.payDayVal);
+            
+            const checkDate = new Date(dateObj); checkDate.setHours(0,0,0,0);
+            const checkPay = new Date(paydayThisMonth); checkPay.setHours(0,0,0,0);
+            const dayOfPay = checkPay.getDate(); // 1-31
 
-    let cycleMonth, cycleYear;
+            // THE 15th RULE:
+            // If Payday is > 15 (e.g. 25th), it funds the NEXT month.
+            // If Payday is <= 15 (e.g. 1st), it funds the CURRENT month.
+            const isLatePay = dayOfPay > 15;
 
-    if (checkDate >= checkPay) {
-        // It's after payday -> belongs to NEXT month's cycle
-        cycleMonth = month + 1;
-        cycleYear = year;
-        if (cycleMonth > 11) { cycleMonth = 0; cycleYear++; }
-    } else {
-        // It's before payday -> belongs to THIS month's cycle (spending prev salary)
-        // (Visual preference: You usually want to name the cycle by the month you are spending IN. 
-        // e.g., Dec 1 - Dec 24 is the "December Cycle")
-        cycleMonth = month;
-        cycleYear = year;
-    }
+            let cycleMonth = month;
+            let cycleYear = year;
 
-    // Create Label (e.g., "Dec 2025") and Sort Key (e.g., "2025-12")
-    const dateForLabel = new Date(cycleYear, cycleMonth, 1);
-    const label = dateForLabel.toLocaleString('default', { month: 'short', year: '2-digit' }); 
-    // You can change 'short' to 'long' if you prefer "December 2025"
-    
-    return { label: label + " Cycle", sortKey: `${cycleYear}-${String(cycleMonth+1).padStart(2,'0')}` };
-}
+            if (checkDate >= checkPay) {
+                // Transaction is AFTER this month's payday
+                if (isLatePay) {
+                    cycleMonth = month + 1; // Late pay -> Next Month Cycle
+                } else {
+                    cycleMonth = month;     // Early pay -> Current Month Cycle
+                }
+            } else {
+                // Transaction is BEFORE this month's payday
+                if (isLatePay) {
+                    cycleMonth = month;     // Late pay -> Current Month Cycle
+                } else {
+                    cycleMonth = month - 1; // Early pay -> Previous Month Cycle
+                }
+            }
+
+            // Handle Year Rollover (Dec -> Jan or Jan -> Dec)
+            if (cycleMonth > 11) { cycleMonth = 0; cycleYear++; }
+            if (cycleMonth < 0) { cycleMonth = 11; cycleYear--; }
+
+            const dateForLabel = new Date(cycleYear, cycleMonth, 1);
+            const label = dateForLabel.toLocaleString('default', { month: 'short', year: '2-digit' }) + " Cycle"; 
+            
+            // Return sortKey for correct chart ordering (YYYY-MM)
+            return { label: label, sortKey: `${cycleYear}-${String(cycleMonth+1).padStart(2,'0')}` };
+        }
 
         function getFinancials() {
             const now = new Date();
