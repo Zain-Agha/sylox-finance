@@ -507,887 +507,770 @@
             <button class="btn btn-secondary" onclick="toggleStreakModal()" style="margin-top:20px;">Close</button>
         </div>
     </div>
+<script>
+    // --- STATE ---
+    let appData = { 
+        username: "Pilot", startDate: null, payDayMode: "date", payDayVal: 1, 
+        currency: "£", 
+        income: 0, fixed: 0, fixedItems: [], goal: 0, goalImage: null, 
+        transactions: [],
+        planHistory: {} // From Code 1: Stores historical snapshots
+    };
+    let tempFixedItems = [];
+    let trendChartInstance = null; let donutChartInstance = null; let methodChartInstance = null; let savingsChartInstance = null;
 
-    <script>
-        // --- STATE ---
-        let appData = { 
-            username: "Pilot", startDate: null, payDayMode: "date", payDayVal: 1, 
-            currency: "£", 
-            income: 0, fixed: 0, fixedItems: [], goal: 0, goalImage: null, transactions: [] 
-        };
-        let tempFixedItems = [];
-        let trendChartInstance = null; let donutChartInstance = null; let methodChartInstance = null; let savingsChartInstance = null;
-
-        // --- INIT ---
-        window.onload = function() {
-            const saved = localStorage.getItem('pilotData');
-            if (saved) {
-                appData = JSON.parse(saved);
-                if (!appData.startDate) appData.startDate = new Date().toISOString();
-                if (!appData.fixedItems) appData.fixedItems = [];
-                if (!appData.payDayMode) { appData.payDayMode = "date"; appData.payDayVal = appData.payDay || 1; }
-                if (!appData.currency) appData.currency = "£";
-                if (appData.income > 0) initApp(); else switchScreen('screen-setup');
-            } else {
-                appData.startDate = new Date().toISOString();
-                switchScreen('screen-setup');
-            }
-            togglePaydayInput();
-        };
-
-        function initApp() {
-            document.getElementById('nav-bar').style.display = 'flex';
-            document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
-            switchScreen('screen-home');
-            updateUI(); // Forces immediate refresh of all data and images
-        }
-
-        // --- FIXED SAVE SETUP LOGIC ---
-        function saveSetup() {
-            const name = document.getElementById('inp-name').value || "Captain";
-            const payMode = document.getElementById('inp-payday-mode').value;
-            const payVal = parseInt(document.getElementById('inp-payday-date').value) || 1;
-            const cur = document.getElementById('inp-currency').value || "£";
-            const income = parseFloat(document.getElementById('inp-income').value) || 0;
-            const goal = parseFloat(document.getElementById('inp-goal').value) || 0;
-            const fileInput = document.getElementById('inp-goal-img');
-
-            if (income === 0) { alert("Income is required."); return; }
-
-            // Calculate Total Fixed
-            let totalFixed = tempFixedItems.reduce((sum, item) => sum + item.cost, 0);
-
-            // Update State
-            appData.username = name;
-            appData.payDayMode = payMode;
-            appData.payDayVal = payVal;
-            appData.currency = cur;
-            appData.income = income;
-            appData.fixed = totalFixed;
-            appData.fixedItems = tempFixedItems;
-            appData.goal = goal;
-
-            // HANDLE IMAGE WITH SAFETY CHECKS
-            if (fileInput.files && fileInput.files[0]) {
-                const file = fileInput.files[0];
-                
-                // Check Size (Limit to ~2.5MB to prevent LocalStorage crash)
-                if (file.size > 2500000) {
-                    alert("Image is too large (Over 2.5MB). Please choose a smaller photo or take a screenshot of it.");
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    appData.goalImage = e.target.result;
-                    finalizeSetup();
-                };
-                reader.readAsDataURL(file);
-            } else {
-                // Keep existing image if no new one selected
-                finalizeSetup();
-            }
-        }
-
-        function finalizeSetup() {
-            try {
-                localStorage.setItem('pilotData', JSON.stringify(appData));
-                
-                // Force UI Update explicitly
-                initApp();
-                
-                // If we are currently on the setup screen, this ensures we move away
-                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-                document.getElementById('screen-home').classList.add('active');
-                
-                updateUI(); // Run update again just to be safe
-                
-            } catch (e) {
-                // Catch "Quota Exceeded" error
-                if (e.name === 'QuotaExceededError') {
-                    alert("Storage Full! The image is too big to save. Please remove the image or choose a smaller one.");
-                } else {
-                    alert("Error saving data: " + e.message);
-                }
-            }
-        }
-
-        // --- NEW: REMOVE IMAGE FUNCTION ---
-        function removeGoalImage() {
-            document.getElementById('inp-goal-img').value = ''; 
-            appData.goalImage = null;
-            alert("Photo removed. Click 'Save Flight Plan' to confirm.");
-        }
-
-        // ... [REST OF YOUR EXISTING FUNCTIONS BELOW: toggleModal, togglePaydayInput, goToPlan, etc.] ...
-        // ... (You don't need to change the rest, just ensure the two functions above are replaced) ...
-
-        function toggleModal(show) {
-            const modal = document.getElementById('modal-log');
-            if(show) {
-                modal.style.display = 'flex';
-                document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
-            } else { modal.style.display = 'none'; }
-        }
-
-        function togglePaydayInput() {
-            const mode = document.getElementById('inp-payday-mode').value;
-            const dateInput = document.getElementById('inp-payday-date');
-            dateInput.style.display = (mode === 'date') ? 'block' : 'none';
-        }
-
-        function goToPlan() {
-            document.getElementById('inp-name').value = appData.username || "";
-            document.getElementById('inp-payday-mode').value = appData.payDayMode || "date";
-            document.getElementById('inp-payday-date').value = appData.payDayVal || 1;
-            document.getElementById('inp-currency').value = appData.currency || "£";
-            document.getElementById('inp-income').value = appData.income || "";
-            document.getElementById('inp-goal').value = appData.goal || "";
-            tempFixedItems = [...appData.fixedItems];
-            if(tempFixedItems.length === 0 && appData.fixed > 0) tempFixedItems.push({ id: Date.now(), name: "Legacy", cost: appData.fixed });
-            renderFixedList();
-            document.getElementById('btn-cancel-setup').style.display = 'block';
-            document.getElementById('data-management-section').style.display = 'block';
+    // --- INIT ---
+    window.onload = function() {
+        const saved = localStorage.getItem('pilotData');
+        if (saved) {
+            appData = JSON.parse(saved);
+            // Ensure compatability between versions
+            if (!appData.startDate) appData.startDate = new Date().toISOString();
+            if (!appData.fixedItems) appData.fixedItems = [];
+            if (!appData.planHistory) appData.planHistory = {}; 
+            if (!appData.payDayMode) { appData.payDayMode = "date"; appData.payDayVal = appData.payDay || 1; }
+            if (!appData.currency) appData.currency = "£";
+            
+            if (appData.income > 0) initApp(); else switchScreen('screen-setup');
+        } else {
+            appData.startDate = new Date().toISOString();
             switchScreen('screen-setup');
         }
+        togglePaydayInput();
+    };
 
-        function switchScreen(screenId) {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(screenId).classList.add('active');
-            if(screenId === 'screen-history') {
-                updateHistoryDropdown();
-                updateDashboard(""); // Load all by default
+    function initApp() {
+        document.getElementById('nav-bar').style.display = 'flex';
+        document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+        switchScreen('screen-home');
+        updateUI();
+    }
+
+    // --- HELPER: HISTORY RETRIEVAL (From Code 1) ---
+    function getPlanForCycle(cycleLabel) {
+        if (appData.planHistory && appData.planHistory[cycleLabel]) {
+            return appData.planHistory[cycleLabel];
+        }
+        return { income: appData.income, fixed: appData.fixed, goal: appData.goal };
+    }
+
+    // --- SETUP & SAVING (HYBRID LOGIC) ---
+    function saveSetup() {
+        const name = document.getElementById('inp-name').value || "Captain";
+        const payMode = document.getElementById('inp-payday-mode').value;
+        const payVal = parseInt(document.getElementById('inp-payday-date').value) || 1;
+        const cur = document.getElementById('inp-currency').value || "£";
+        const newIncome = parseFloat(document.getElementById('inp-income').value) || 0;
+        const newGoal = parseFloat(document.getElementById('inp-goal').value) || 0;
+        const fileInput = document.getElementById('inp-goal-img');
+
+        if (newIncome === 0) { alert("Income is required."); return; }
+        
+        // Calculate Total Fixed
+        let newTotalFixed = tempFixedItems.reduce((sum, item) => sum + item.cost, 0);
+
+        // 1. SMART HISTORY CHECK (From Code 1)
+        const hasFinancialChange = (newIncome !== appData.income) || (newTotalFixed !== appData.fixed);
+
+        if (hasFinancialChange && appData.transactions.length > 0) {
+            const updateAll = confirm(
+                "You updated your financial plan.\n\n" +
+                "OK = Apply to Past History too (Fixing a typo)\n" +
+                "Cancel = Apply to Current & Future Months only (I got a raise)"
+            );
+
+            if (updateAll) {
+                // WIPE HISTORY: Everything uses new values
+                appData.planHistory = {};
+            } else {
+                // SMART LOCK: Lock past months to OLD values
+                const currentCycle = getCycleInfo(new Date());
+                const currentLabel = currentCycle.label;
+
+                // Loop through transactions to identify past cycles
+                appData.transactions.forEach(tx => {
+                    const d = new Date(tx.date);
+                    const cycle = getCycleInfo(d);
+                    const label = cycle.label;
+                    
+                    // If it's a PAST cycle, lock it to the OLD values
+                    if (label !== currentLabel && !appData.planHistory[label]) {
+                        appData.planHistory[label] = {
+                            income: appData.income, 
+                            fixed: appData.fixed,
+                            goal: appData.goal
+                        };
+                    }
+                });
             }
         }
 
-        function detectCategory() {
-            const desc = document.getElementById('tx-desc').value.toLowerCase();
-            const categorySelect = document.getElementById('tx-category');
-            const mapping = {
-                'Food': ['burger', 'pizza', 'coffee', 'starbucks', 'nandos', 'kfc', 'mcdonalds', 'lunch', 'dinner', 'breakfast', 'bar', 'pub', 'drink', 'cafe', 'restaurant'],
-                'Grocery': ['tesco', 'asda', 'sainsbury', 'lidl', 'aldi', 'waitrose', 'marks', 'milk', 'bread', 'grocer', 'supermarket'],
-                'Transport': ['uber', 'bolt', 'bus', 'train', 'ticket', 'rail', 'fuel', 'petrol', 'gas', 'parking', 'taxi'],
-                'Shopping': ['amazon', 'clothes', 'shoes', 'nike', 'zara', 'h&m', 'primark', 'shop', 'ikea'],
-                'Bills': ['rent', 'electric', 'water', 'gas', 'council', 'wifi', 'broadband', 'mobile', 'phone'],
-                'Entertainment': ['cinema', 'movie', 'netflix', 'spotify', 'game', 'bowling', 'party'],
-                'Health': ['pharmacy', 'boots', 'doctor', 'dentist', 'gym', 'protein', 'supplement'],
-                'Holidays': ['hotel', 'airbnb', 'flight', 'booking', 'trip']
-            };
-            for (const [cat, keywords] of Object.entries(mapping)) {
-                if (keywords.some(k => desc.includes(k))) { categorySelect.value = cat; break; }
+        // Apply New Values Globally
+        appData.username = name; 
+        appData.payDayMode = payMode; 
+        appData.payDayVal = payVal;
+        appData.currency = cur;
+        appData.income = newIncome; 
+        appData.fixed = newTotalFixed; 
+        appData.fixedItems = tempFixedItems; 
+        appData.goal = newGoal;
+
+        // 2. IMAGE SAFETY CHECK (From Code 2)
+        if (fileInput.files && fileInput.files[0]) {
+            const file = fileInput.files[0];
+            if (file.size > 2500000) { 
+                alert("Image is too large (>2.5MB). Please choose a smaller photo to prevent storage errors."); 
+                return; 
             }
-        }
-
-        function updateHistoryDropdown() {
-            const selector = document.getElementById('history-month-selector');
-            const currentSelection = selector.value;
-            selector.innerHTML = '<option value="">-- All Flights --</option>';
-            const months = new Set();
-            appData.transactions.forEach(tx => {
-                const d = new Date(tx.date);
-                const cycle = getCycleInfo(d);
-                const key = cycle.label; 
-                months.add(key);
-                months.add(key);
-            });
-            Array.from(months).forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m; opt.innerText = m;
-                selector.appendChild(opt);
-            });
-            if (currentSelection) selector.value = currentSelection;
-        }
-
-        function updateDashboard(selectedMonth) {
-            renderReportCard(selectedMonth);
-            renderCharts(selectedMonth);
-            renderList('full-history-list', 1000, selectedMonth);
-        }
-
-        function renderReportCard(selectedMonth) {
-            const card = document.getElementById('monthly-report-card');
-            if(!selectedMonth) { card.style.display = 'none'; return; }
-            
-            card.style.display = 'block';
-            let monthlySpend = 0;
-            const catBreakdown = {};
-            
-            appData.transactions.forEach(tx => {
-                const d = new Date(tx.date);
-                const cycle = getCycleInfo(d);
-                 const key = cycle.label;
-                if(key === selectedMonth) {
-                    monthlySpend += tx.amount;
-                    catBreakdown[tx.category] = (catBreakdown[tx.category] || 0) + tx.amount;
-                }
-            });
-
-            let maxLeak = 0; let leakCat = "None";
-            for(const [cat, amt] of Object.entries(catBreakdown)) {
-                if(amt > maxLeak) { maxLeak = amt; leakCat = cat; }
-            }
-            const net = (appData.income - appData.fixed) - monthlySpend;
-            const sym = appData.currency;
-
-            document.getElementById('rpt-spent').innerText = `${sym}${monthlySpend.toFixed(2)}`;
-            document.getElementById('rpt-saved').innerText = `${sym}${net.toFixed(2)}`;
-            document.getElementById('rpt-leak').innerText = `${leakCat} (${sym}${maxLeak.toFixed(0)})`;
-        }
-
-        function exportToExcel() {
-            let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "Date,Amount,Category,Method,Description\n";
-            appData.transactions.forEach(tx => {
-                const date = new Date(tx.date).toLocaleDateString('en-GB');
-                const row = `${date},${tx.amount},${tx.category},${tx.method || 'Debit'},${tx.desc}`;
-                csvContent += row + "\n";
-            });
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "pilot_flight_log.csv");
-            document.body.appendChild(link);
-            link.click();
-        }
-
-        function exportBackup() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData));
-            const link = document.createElement("a");
-            link.setAttribute("href", dataStr);
-            link.setAttribute("download", "pilot_system_backup.json");
-            document.body.appendChild(link);
-            link.click();
-        }
-
-        function importBackup(input) {
-            const file = input.files[0];
-            if(!file) return;
             const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const importedData = JSON.parse(e.target.result);
-                    if(importedData.income && importedData.transactions) {
-                        if(confirm("Overwrite current data with this backup?")) {
-                            localStorage.setItem('pilotData', JSON.stringify(importedData));
-                            location.reload();
-                        }
-                    } else { alert("Invalid backup file."); }
-                } catch(err) { alert("Error reading file."); }
-            };
-            reader.readAsText(file);
+            reader.onload = function(e) { appData.goalImage = e.target.result; finalizeSetup(); };
+            reader.readAsDataURL(file);
+        } else { 
+            finalizeSetup(); 
         }
+    }
 
-        function getPayDateForMonth(year, month, mode, val) {
-            if (mode === 'date') {
-                const lastDay = new Date(year, month + 1, 0).getDate();
-                const day = Math.min(val, lastDay);
-                return new Date(year, month, day);
+    function finalizeSetup() {
+        try {
+            // SAFE SAVE (From Code 2)
+            localStorage.setItem('pilotData', JSON.stringify(appData));
+            initApp();
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('screen-home').classList.add('active');
+            updateUI();
+        } catch (e) { 
+            if (e.name === 'QuotaExceededError') {
+                alert("Storage Full! The image is too big to save. Please remove the image.");
+            } else {
+                alert("Storage Error: " + e.message); 
             }
-            if (mode === 'last_thu') return getLastDayOfWeek(year, month, 4);
-            if (mode === 'last_fri') return getLastDayOfWeek(year, month, 5);
-            return new Date(year, month, 1);
+        }
+    }
+
+    function removeGoalImage() {
+        document.getElementById('inp-goal-img').value = ''; 
+        appData.goalImage = null;
+        alert("Photo removed. Click 'Save Flight Plan' to confirm.");
+    }
+
+    // --- STANDARD UI HELPERS ---
+    function toggleModal(show) {
+        const modal = document.getElementById('modal-log');
+        if(show) {
+            modal.style.display = 'flex';
+            document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+        } else { modal.style.display = 'none'; }
+    }
+
+    function togglePaydayInput() {
+        const mode = document.getElementById('inp-payday-mode').value;
+        const dateInput = document.getElementById('inp-payday-date');
+        dateInput.style.display = (mode === 'date') ? 'block' : 'none';
+    }
+
+    function goToPlan() {
+        document.getElementById('inp-name').value = appData.username || "";
+        document.getElementById('inp-payday-mode').value = appData.payDayMode || "date";
+        document.getElementById('inp-payday-date').value = appData.payDayVal || 1;
+        document.getElementById('inp-currency').value = appData.currency || "£";
+        document.getElementById('inp-income').value = appData.income || "";
+        document.getElementById('inp-goal').value = appData.goal || "";
+        tempFixedItems = [...appData.fixedItems];
+        if(tempFixedItems.length === 0 && appData.fixed > 0) tempFixedItems.push({ id: Date.now(), name: "Legacy", cost: appData.fixed });
+        renderFixedList();
+        document.getElementById('btn-cancel-setup').style.display = 'block';
+        document.getElementById('data-management-section').style.display = 'block';
+        switchScreen('screen-setup');
+    }
+
+    function switchScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+        if(screenId === 'screen-history') {
+            updateHistoryDropdown();
+            updateDashboard(""); 
+        }
+    }
+    
+    function detectCategory() {
+        const desc = document.getElementById('tx-desc').value.toLowerCase();
+        const categorySelect = document.getElementById('tx-category');
+        const mapping = {
+            'Food': ['burger', 'pizza', 'coffee', 'starbucks', 'nandos', 'kfc', 'mcdonalds', 'lunch', 'dinner', 'breakfast', 'bar', 'pub', 'drink', 'cafe', 'restaurant'],
+            'Grocery': ['tesco', 'asda', 'sainsbury', 'lidl', 'aldi', 'waitrose', 'marks', 'milk', 'bread', 'grocer', 'supermarket'],
+            'Transport': ['uber', 'bolt', 'bus', 'train', 'ticket', 'rail', 'fuel', 'petrol', 'gas', 'parking', 'taxi'],
+            'Shopping': ['amazon', 'clothes', 'shoes', 'nike', 'zara', 'h&m', 'primark', 'shop', 'ikea'],
+            'Bills': ['rent', 'electric', 'water', 'gas', 'council', 'wifi', 'broadband', 'mobile', 'phone'],
+            'Entertainment': ['cinema', 'movie', 'netflix', 'spotify', 'game', 'bowling', 'party'],
+            'Health': ['pharmacy', 'boots', 'doctor', 'dentist', 'gym', 'protein', 'supplement'],
+            'Holidays': ['hotel', 'airbnb', 'flight', 'booking', 'trip']
+        };
+        for (const [cat, keywords] of Object.entries(mapping)) {
+            if (keywords.some(k => desc.includes(k))) { categorySelect.value = cat; break; }
+        }
+    }
+
+    // --- DATA MANAGEMENT ---
+    function updateHistoryDropdown() {
+        const selector = document.getElementById('history-month-selector');
+        const currentSelection = selector.value;
+        selector.innerHTML = '<option value="">-- All Flights --</option>';
+        const months = new Set();
+        appData.transactions.forEach(tx => {
+            const d = new Date(tx.date);
+            const cycle = getCycleInfo(d);
+            months.add(cycle.label);
+        });
+        Array.from(months).forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m; opt.innerText = m;
+            selector.appendChild(opt);
+        });
+        if (currentSelection) selector.value = currentSelection;
+    }
+
+    function exportToExcel() {
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "Date,Cycle,Amount,Category,Method,Description\n";
+        appData.transactions.forEach(tx => {
+            const d = new Date(tx.date);
+            const cycle = getCycleInfo(d);
+            const dateStr = d.toLocaleDateString('en-GB');
+            const row = `${dateStr},${cycle.label},${tx.amount},${tx.category},${tx.method || 'Debit'},${tx.desc}`;
+            csvContent += row + "\n";
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "pilot_flight_log.csv");
+        document.body.appendChild(link);
+        link.click();
+    }
+
+    function exportBackup() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData));
+        const link = document.createElement("a");
+        link.setAttribute("href", dataStr);
+        link.setAttribute("download", "pilot_system_backup.json");
+        document.body.appendChild(link);
+        link.click();
+    }
+
+    function importBackup(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if(importedData.income && importedData.transactions) {
+                    if(confirm("Overwrite current data with this backup?")) {
+                        localStorage.setItem('pilotData', JSON.stringify(importedData));
+                        location.reload();
+                    }
+                } else { alert("Invalid backup file."); }
+            } catch(err) { alert("Error reading file."); }
+        };
+        reader.readAsText(file);
+    }
+
+    // --- PAYDAY & CYCLE LOGIC (FROM CODE 2: THE 15TH RULE) ---
+    function getPayDateForMonth(year, month, mode, val) {
+        if (mode === 'date') {
+            const lastDay = new Date(year, month + 1, 0).getDate();
+            const day = Math.min(val, lastDay);
+            return new Date(year, month, day);
+        }
+        if (mode === 'last_thu') return getLastDayOfWeek(year, month, 4);
+        if (mode === 'last_fri') return getLastDayOfWeek(year, month, 5);
+        return new Date(year, month, 1);
+    }
+
+    function getLastDayOfWeek(year, month, targetDayOfWeek) {
+        let d = new Date(year, month + 1, 0);
+        while (d.getDay() !== targetDayOfWeek) { d.setDate(d.getDate() - 1); }
+        return d;
+    }
+    
+    function getCycleInfo(dateObj) {
+        const year = dateObj.getFullYear();
+        const month = dateObj.getMonth();
+        const paydayThisMonth = getPayDateForMonth(year, month, appData.payDayMode, appData.payDayVal);
+        
+        const checkDate = new Date(dateObj); checkDate.setHours(0,0,0,0);
+        const checkPay = new Date(paydayThisMonth); checkPay.setHours(0,0,0,0);
+        const dayOfPay = checkPay.getDate();
+
+        // THE 15th RULE (From Code 2)
+        // Payday > 15 funds NEXT month. Payday <= 15 funds CURRENT.
+        const isLatePay = dayOfPay > 15;
+        let cycleMonth = month;
+        let cycleYear = year;
+
+        if (checkDate >= checkPay) {
+            if (isLatePay) { cycleMonth = month + 1; } else { cycleMonth = month; }
+        } else {
+            if (isLatePay) { cycleMonth = month; } else { cycleMonth = month - 1; }
         }
 
-        function getLastDayOfWeek(year, month, targetDayOfWeek) {
-            let d = new Date(year, month + 1, 0);
-            while (d.getDay() !== targetDayOfWeek) { d.setDate(d.getDate() - 1); }
-            return d;
-        }
+        if (cycleMonth > 11) { cycleMonth = 0; cycleYear++; }
+        if (cycleMonth < 0) { cycleMonth = 11; cycleYear--; }
 
-        function addFixedItem() {
-            const name = document.getElementById('new-fixed-name').value;
-            const cost = parseFloat(document.getElementById('new-fixed-cost').value);
-            if(!name || !cost) { alert("Need name and cost"); return; }
-            tempFixedItems.push({ id: Date.now(), name: name, cost: cost });
-            document.getElementById('new-fixed-name').value = ''; document.getElementById('new-fixed-cost').value = '';
-            renderFixedList();
-        }
-        function removeFixedItem(id) { tempFixedItems = tempFixedItems.filter(item => item.id !== id); renderFixedList(); }
-        function renderFixedList() {
-            const listEl = document.getElementById('fixed-list-display');
-            const totalEl = document.getElementById('calc-fixed-total');
-            listEl.innerHTML = ''; let total = 0;
-            const sym = document.getElementById('inp-currency') ? document.getElementById('inp-currency').value : (appData.currency || '£');
-            tempFixedItems.forEach(item => {
-                total += item.cost;
-                const div = document.createElement('div');
-                div.style.cssText = "display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #333; font-size:0.9rem;";
-                div.innerHTML = `<span>${item.name}: ${sym}${item.cost.toFixed(2)}</span><span onclick="removeFixedItem(${item.id})" style="color:var(--danger); cursor:pointer;">✕</span>`;
-                listEl.appendChild(div);
-            });
-            totalEl.innerText = total.toFixed(2);
-        }
+        const dateForLabel = new Date(cycleYear, cycleMonth, 1);
+        const label = dateForLabel.toLocaleString('default', { month: 'short', year: '2-digit' }) + " Cycle"; 
+        return { label: label, sortKey: `${cycleYear}-${String(cycleMonth+1).padStart(2,'0')}` };
+    }
 
-        function addTransaction() {
-            const amt = parseFloat(document.getElementById('tx-amount').value);
-            const desc = document.getElementById('tx-desc').value || "Unknown";
-            const method = document.getElementById('tx-method').value;
-            const category = document.getElementById('tx-category').value;
-            const dateVal = document.getElementById('tx-date').value; 
+    // --- FIXED ITEMS LOGIC ---
+    function addFixedItem() {
+        const name = document.getElementById('new-fixed-name').value;
+        const cost = parseFloat(document.getElementById('new-fixed-cost').value);
+        if(!name || !cost) { alert("Need name and cost"); return; }
+        tempFixedItems.push({ id: Date.now(), name: name, cost: cost });
+        document.getElementById('new-fixed-name').value = ''; document.getElementById('new-fixed-cost').value = '';
+        renderFixedList();
+    }
+    function removeFixedItem(id) { tempFixedItems = tempFixedItems.filter(item => item.id !== id); renderFixedList(); }
+    function renderFixedList() {
+        const listEl = document.getElementById('fixed-list-display');
+        const totalEl = document.getElementById('calc-fixed-total');
+        listEl.innerHTML = ''; let total = 0;
+        const sym = document.getElementById('inp-currency') ? document.getElementById('inp-currency').value : (appData.currency || '£');
+        tempFixedItems.forEach(item => {
+            total += item.cost;
+            const div = document.createElement('div');
+            div.style.cssText = "display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #333; font-size:0.9rem;";
+            div.innerHTML = `<span>${item.name}: ${sym}${item.cost.toFixed(2)}</span><span onclick="removeFixedItem(${item.id})" style="color:var(--danger); cursor:pointer;">✕</span>`;
+            listEl.appendChild(div);
+        });
+        totalEl.innerText = total.toFixed(2);
+    }
 
-            if (!amt || amt <= 0) { alert("Enter a valid amount."); return; }
+    // --- TRANSACTION LOGIC ---
+    function addTransaction() {
+        const amt = parseFloat(document.getElementById('tx-amount').value);
+        const desc = document.getElementById('tx-desc').value || "Unknown";
+        const method = document.getElementById('tx-method').value;
+        const category = document.getElementById('tx-category').value;
+        const dateVal = document.getElementById('tx-date').value; 
 
-            const newTx = {
-                id: Date.now(), date: new Date(dateVal).toISOString(), 
-                amount: amt, desc: desc, category: category, method: method
-            };
+        if (!amt || amt <= 0) { alert("Enter a valid amount."); return; }
 
-            appData.transactions.unshift(newTx);
-            appData.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const newTx = {
+            id: Date.now(), date: new Date(dateVal).toISOString(), 
+            amount: amt, desc: desc, category: category, method: method
+        };
 
-            document.getElementById('tx-amount').value = '';
-            document.getElementById('tx-desc').value = '';
-            toggleModal(false);
+        appData.transactions.unshift(newTx);
+        appData.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        document.getElementById('tx-amount').value = '';
+        document.getElementById('tx-desc').value = '';
+        toggleModal(false);
+        localStorage.setItem('pilotData', JSON.stringify(appData));
+        updateUI();
+    }
+
+    function deleteTransaction(id) {
+        if(confirm("Delete this entry?")) {
+            appData.transactions = appData.transactions.filter(tx => tx.id !== id);
             localStorage.setItem('pilotData', JSON.stringify(appData));
             updateUI();
         }
+    }
+    
+    function clearAllData() { if(confirm("Factory Reset?")) { localStorage.removeItem('pilotData'); location.reload(); } }
 
-        function deleteTransaction(id) {
-            if(confirm("Delete this entry?")) {
-                appData.transactions = appData.transactions.filter(tx => tx.id !== id);
-                localStorage.setItem('pilotData', JSON.stringify(appData));
-                updateUI();
-            }
+    // --- FINANCIAL CALCULATIONS (Current Period) ---
+    function getFinancials() {
+        const now = new Date();
+        let currentPayDate = getPayDateForMonth(now.getFullYear(), now.getMonth(), appData.payDayMode, appData.payDayVal);
+        let prevPayDate = getPayDateForMonth(now.getFullYear(), now.getMonth() - 1, appData.payDayMode, appData.payDayVal);
+        let nextPayDate = getPayDateForMonth(now.getFullYear(), now.getMonth() + 1, appData.payDayMode, appData.payDayVal);
+        
+        let startOfPeriod, endOfPeriod;
+        const checkDate = new Date(now); checkDate.setHours(0,0,0,0);
+        const checkPay = new Date(currentPayDate); checkPay.setHours(0,0,0,0);
+
+        if (checkDate >= checkPay) { startOfPeriod = currentPayDate; endOfPeriod = nextPayDate; } 
+        else { startOfPeriod = prevPayDate; endOfPeriod = currentPayDate; }
+        
+        startOfPeriod.setHours(0,0,0,0);
+        endOfPeriod = new Date(endOfPeriod); endOfPeriod.setDate(endOfPeriod.getDate() - 1); endOfPeriod.setHours(23,59,59,999);
+
+        const periodTransactions = appData.transactions.filter(tx => {
+            const txDate = new Date(tx.date); txDate.setHours(12,0,0,0);
+            const s = new Date(startOfPeriod); s.setHours(0,0,0,0);
+            const e = new Date(endOfPeriod); e.setHours(23,59,59,999);
+            return txDate >= s && txDate <= e;
+        });
+
+        const totalDisposable = appData.income - appData.fixed - appData.goal;
+        const totalSpent = periodTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+        const remainingPot = totalDisposable - totalSpent;
+
+        const oneDay = 1000 * 60 * 60 * 24;
+        const diffTime = endOfPeriod.getTime() - now.getTime();
+        const daysLeft = Math.ceil(diffTime / oneDay);
+        const safeDaysLeft = daysLeft < 1 ? 1 : daysLeft;
+        let dailySafe = remainingPot / safeDaysLeft;
+        
+        const totalDaysInPeriod = Math.round((endOfPeriod - startOfPeriod) / oneDay) + 1;
+        const daysPassed = totalDaysInPeriod - daysLeft;
+        const monthProgress = daysPassed / totalDaysInPeriod;
+
+        let daysActive = 1;
+        let effectiveStart = new Date(appData.startDate); effectiveStart.setHours(0,0,0,0);
+        if (periodTransactions.length > 0) {
+            const earliestTx = new Date(periodTransactions[periodTransactions.length - 1].date); earliestTx.setHours(0,0,0,0);
+            if (earliestTx < effectiveStart) effectiveStart = earliestTx;
+        }
+        const pStart = new Date(startOfPeriod); pStart.setHours(0,0,0,0);
+        if (effectiveStart < pStart) effectiveStart = pStart;
+        
+        const nowMidnight = new Date(now); nowMidnight.setHours(0,0,0,0);
+        const diffActive = nowMidnight - effectiveStart;
+        daysActive = Math.floor(diffActive / oneDay) + 1;
+
+        return { totalDisposable, totalSpent, remainingPot, dailySafe, monthProgress, daysInMonth: totalDaysInPeriod, startOfPeriod, safeDaysLeft, daysActive, endOfPeriod };
+    }
+
+    // --- STREAK LOGIC (FROM CODE 2: UNIVERSAL TIME) ---
+    function calculateStreak() {
+        if(!appData.startDate) return 0;
+        const stats = getFinancials();
+        
+        // Helper: Generate a "YYYY-MM-DD" string based on the PHONE'S local clock.
+        const getLocalKey = (d) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        let start = new Date(appData.startDate);
+        if (appData.transactions.length > 0) {
+             const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
+             if (earliest < start) start = earliest;
+        }
+        
+        const endOfPeriod = new Date(stats.endOfPeriod);
+        const totalDaysAvailable = Math.ceil((endOfPeriod - start) / (1000 * 60 * 60 * 24));
+        const safeDays = totalDaysAvailable > 0 ? totalDaysAvailable : 1;
+        const dailyAllowance = stats.totalDisposable / safeDays;
+
+        const dailySpends = {};
+        appData.transactions.forEach(tx => {
+            const d = new Date(tx.date);
+            const key = getLocalKey(d);
+            dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
+        });
+
+        let streak = 0;
+        const today = new Date(); 
+        let virtualBalance = 0; 
+        const history = [];
+        let cursor = new Date(start); cursor.setHours(0,0,0,0);
+        const todayMidnight = new Date(today); todayMidnight.setHours(0,0,0,0);
+        
+        while (cursor <= todayMidnight) {
+            virtualBalance += dailyAllowance;
+            const key = getLocalKey(cursor);
+            const spent = dailySpends[key] || 0;
+            virtualBalance -= spent;
+            if (virtualBalance >= -1.0) history.push(true); else history.push(false);
+            cursor.setDate(cursor.getDate() + 1);
         }
 
-// --- CYCLE HELPER (FIXED: 15th RULE) ---
-        function getCycleInfo(dateObj) {
-            const year = dateObj.getFullYear();
-            const month = dateObj.getMonth();
-            
-            const paydayThisMonth = getPayDateForMonth(year, month, appData.payDayMode, appData.payDayVal);
-            
-            const checkDate = new Date(dateObj); checkDate.setHours(0,0,0,0);
-            const checkPay = new Date(paydayThisMonth); checkPay.setHours(0,0,0,0);
-            const dayOfPay = checkPay.getDate(); // 1-31
+        for (let i = history.length - 1; i >= 0; i--) { if (history[i] === true) streak++; else break; }
+        return streak;
+    }
 
-            // THE 15th RULE:
-            // If Payday is > 15 (e.g. 25th), it funds the NEXT month.
-            // If Payday is <= 15 (e.g. 1st), it funds the CURRENT month.
-            const isLatePay = dayOfPay > 15;
+    // --- MODAL: STREAK DETAILS (FROM CODE 2) ---
+    function toggleStreakModal() {
+        const modal = document.getElementById('modal-streak');
+        if (modal.style.display === 'flex') { modal.style.display = 'none'; return; }
 
-            let cycleMonth = month;
-            let cycleYear = year;
+        if(!appData.startDate) return;
+        const stats = getFinancials();
+        const sym = appData.currency || '£';
 
-            if (checkDate >= checkPay) {
-                // Transaction is AFTER this month's payday
-                if (isLatePay) {
-                    cycleMonth = month + 1; // Late pay -> Next Month Cycle
-                } else {
-                    cycleMonth = month;     // Early pay -> Current Month Cycle
-                }
-            } else {
-                // Transaction is BEFORE this month's payday
-                if (isLatePay) {
-                    cycleMonth = month;     // Late pay -> Current Month Cycle
-                } else {
-                    cycleMonth = month - 1; // Early pay -> Previous Month Cycle
-                }
-            }
+        let start = new Date(appData.startDate);
+        if (appData.transactions.length > 0) {
+             const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
+             if (earliest < start) start = earliest;
+        }
+        
+        const endOfPeriod = new Date(stats.endOfPeriod);
+        const totalDaysAvailable = Math.ceil((endOfPeriod - start) / (1000 * 60 * 60 * 24));
+        const safeDays = totalDaysAvailable > 0 ? totalDaysAvailable : 1;
+        const dailyAllowance = stats.totalDisposable / safeDays;
 
-            // Handle Year Rollover (Dec -> Jan or Jan -> Dec)
-            if (cycleMonth > 11) { cycleMonth = 0; cycleYear++; }
-            if (cycleMonth < 0) { cycleMonth = 11; cycleYear--; }
+        const getLocalKey = (d) => { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
 
-            const dateForLabel = new Date(cycleYear, cycleMonth, 1);
-            const label = dateForLabel.toLocaleString('default', { month: 'short', year: '2-digit' }) + " Cycle"; 
-            
-            // Return sortKey for correct chart ordering (YYYY-MM)
-            return { label: label, sortKey: `${cycleYear}-${String(cycleMonth+1).padStart(2,'0')}` };
+        const dailySpends = {};
+        appData.transactions.forEach(tx => {
+            const d = new Date(tx.date);
+            const key = getLocalKey(d);
+            dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
+        });
+
+        let virtualBalance = 0;
+        const today = new Date();
+        const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+        let cursor = new Date(start); cursor.setHours(0,0,0,0); yesterday.setHours(0,0,0,0);
+        
+        while (cursor <= yesterday) {
+            virtualBalance += dailyAllowance;
+            const key = getLocalKey(cursor);
+            virtualBalance -= (dailySpends[key] || 0);
+            cursor.setDate(cursor.getDate() + 1);
         }
 
-        function getFinancials() {
-            const now = new Date();
-            let currentPayDate = getPayDateForMonth(now.getFullYear(), now.getMonth(), appData.payDayMode, appData.payDayVal);
-            let prevPayDate = getPayDateForMonth(now.getFullYear(), now.getMonth() - 1, appData.payDayMode, appData.payDayVal);
-            let nextPayDate = getPayDateForMonth(now.getFullYear(), now.getMonth() + 1, appData.payDayMode, appData.payDayVal);
-            
-            let startOfPeriod, endOfPeriod;
-            const checkDate = new Date(now); checkDate.setHours(0,0,0,0);
-            const checkPay = new Date(currentPayDate); checkPay.setHours(0,0,0,0);
-
-            if (checkDate >= checkPay) { startOfPeriod = currentPayDate; endOfPeriod = nextPayDate; } 
-            else { startOfPeriod = prevPayDate; endOfPeriod = currentPayDate; }
-            
-            startOfPeriod.setHours(0,0,0,0);
-            endOfPeriod = new Date(endOfPeriod); endOfPeriod.setDate(endOfPeriod.getDate() - 1); endOfPeriod.setHours(23,59,59,999);
-
-            const periodTransactions = appData.transactions.filter(tx => {
-                const txDate = new Date(tx.date); txDate.setHours(12,0,0,0);
-                const s = new Date(startOfPeriod); s.setHours(0,0,0,0);
-                const e = new Date(endOfPeriod); e.setHours(23,59,59,999);
-                return txDate >= s && txDate <= e;
-            });
-
-            const totalDisposable = appData.income - appData.fixed - appData.goal;
-            const totalSpent = periodTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-            const remainingPot = totalDisposable - totalSpent;
-
-            const oneDay = 1000 * 60 * 60 * 24;
-            const diffTime = endOfPeriod.getTime() - now.getTime();
-            const daysLeft = Math.ceil(diffTime / oneDay);
-            const safeDaysLeft = daysLeft < 1 ? 1 : daysLeft;
-            let dailySafe = remainingPot / safeDaysLeft;
-            
-            const totalDaysInPeriod = Math.round((endOfPeriod - startOfPeriod) / oneDay) + 1;
-            const daysPassed = totalDaysInPeriod - daysLeft;
-            const monthProgress = daysPassed / totalDaysInPeriod;
-
-            let daysActive = 1;
-            let effectiveStart = new Date(appData.startDate); effectiveStart.setHours(0,0,0,0);
-            if (periodTransactions.length > 0) {
-                const earliestTx = new Date(periodTransactions[periodTransactions.length - 1].date); earliestTx.setHours(0,0,0,0);
-                if (earliestTx < effectiveStart) effectiveStart = earliestTx;
-            }
-            const pStart = new Date(startOfPeriod); pStart.setHours(0,0,0,0);
-            if (effectiveStart < pStart) effectiveStart = pStart;
-            
-            const nowMidnight = new Date(now); nowMidnight.setHours(0,0,0,0);
-            const diffActive = nowMidnight - effectiveStart;
-            daysActive = Math.floor(diffActive / oneDay) + 1;
-
-            return { totalDisposable, totalSpent, remainingPot, dailySafe, monthProgress, daysInMonth: totalDaysInPeriod, startOfPeriod, safeDaysLeft, daysActive, endOfPeriod };
-        }
-
-        // --- STREAK LOGIC ---
-        // --- STREAK LOGIC (UNIVERSAL LOCAL TIME) ---
-        function calculateStreak() {
-            if(!appData.startDate) return 0;
-            const stats = getFinancials();
-            
-            // Helper: Generate a "YYYY-MM-DD" string based on the PHONE'S local clock.
-            // This ensures 11pm counts as Today, and 12:01am counts as Tomorrow.
-            const getLocalKey = (d) => {
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
-            };
-
-            // 1. Determine Start Date
-            let start = new Date(appData.startDate);
-            if (appData.transactions.length > 0) {
-                 // Scan for the earliest transaction date
-                 const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
-                 if (earliest < start) start = earliest;
-            }
-            
-            // 2. Calculate Daily Allowance
-            const endOfPeriod = new Date(stats.endOfPeriod);
-            // Calculate total days in this specific user's active period
-            const totalDaysAvailable = Math.ceil((endOfPeriod - start) / (1000 * 60 * 60 * 24));
-            const safeDays = totalDaysAvailable > 0 ? totalDaysAvailable : 1;
-            const dailyAllowance = stats.totalDisposable / safeDays;
-
-            // 3. Map Spending using LOCAL KEYS
-            const dailySpends = {};
-            appData.transactions.forEach(tx => {
-                const d = new Date(tx.date);
-                const key = getLocalKey(d); // Uses local phone time
-                dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
-            });
-
-            // 4. Replay History
-            let streak = 0;
-            const today = new Date(); 
-            
-            let virtualBalance = 0; 
-            const history = [];
-            
-            // Loop from Start Date to Today
-            // Set time to 00:00:00 to iterate safely through calendar days
-            let cursor = new Date(start);
-            cursor.setHours(0,0,0,0);
-            
-            const todayMidnight = new Date(today);
-            todayMidnight.setHours(0,0,0,0);
-            
-            while (cursor <= todayMidnight) {
-                virtualBalance += dailyAllowance;
-                
-                const key = getLocalKey(cursor);
-                const spent = dailySpends[key] || 0;
-                
-                virtualBalance -= spent;
-                
-                // STRICT CHECK:
-                // If accumulated balance drops below -1.00 (buffer), streak breaks.
-                if (virtualBalance >= -1.0) {
-                    history.push(true); 
-                } else {
-                    history.push(false); 
-                }
-                
-                // Move to next day
-                cursor.setDate(cursor.getDate() + 1);
-            }
-
-            // 5. Count the Streak (Backwards from today)
-            for (let i = history.length - 1; i >= 0; i--) {
-                if (history[i] === true) streak++; 
-                else break; 
-            }
-            
-            return streak;
-        }
-
-        function updateUI() {
-            const stats = getFinancials();
-            const sym = appData.currency || '£';
-            document.getElementById('greeting-display').innerText = appData.username;
-            
-            const streakCount = calculateStreak();
-            const streakBadge = document.getElementById('streak-badge');
-            if(streakCount > 0) { streakBadge.style.display = 'inline-flex'; document.getElementById('streak-count').innerText = streakCount + " Day Streak"; } 
-            else { streakBadge.style.display = 'none'; }
-
-            const safeEl = document.getElementById('safe-balance');
-            const potEl = document.getElementById('total-pot');
-            let displayDaily = stats.dailySafe < 0 ? 0 : stats.dailySafe;
-            safeEl.innerText = `${sym}${displayDaily.toFixed(2)}`;
-            potEl.innerText = `${sym}${stats.remainingPot.toFixed(2)}`;
-
-            const fuelBar = document.getElementById('fuel-bar');
-            let percentage = (stats.remainingPot / stats.totalDisposable) * 100;
-            if (percentage < 0) percentage = 0; if (percentage > 100) percentage = 100;
-            fuelBar.style.width = percentage + '%';
-
-            const forecastBox = document.getElementById('forecast-display');
-            const forecastText = document.getElementById('forecast-text');
-            if (stats.totalSpent > 0 && stats.remainingPot > 0) {
-                forecastBox.style.display = 'flex';
-                const avgBurn = stats.totalSpent / stats.daysActive; 
-                const daysRemaining = stats.safeDaysLeft;
-                const projectedEndBalance = stats.remainingPot - (avgBurn * daysRemaining);
-
-                if (projectedEndBalance >= 0) {
-                    forecastBox.style.borderLeft = "4px solid var(--primary)"; forecastBox.style.background = "rgba(46, 204, 113, 0.1)";
-                    forecastText.innerHTML = `<strong>Smooth Sailing.</strong><br>Burning ${sym}${avgBurn.toFixed(0)}/day (Active: ${stats.daysActive} days). Land with <strong>${sym}${projectedEndBalance.toFixed(0)}</strong>.`;
-                } else {
-                    forecastBox.style.borderLeft = "4px solid var(--danger)"; forecastBox.style.background = "rgba(231, 76, 60, 0.1)";
-                    const daysUntilCrash = avgBurn > 0 ? (stats.remainingPot / avgBurn) : 0;
-                    const crashDate = new Date(); crashDate.setDate(new Date().getDate() + daysUntilCrash);
-                    forecastText.innerHTML = `<strong>Pull Up!</strong><br>Burning ${sym}${avgBurn.toFixed(0)}/day. Dry on <strong>${crashDate.toLocaleDateString('en-GB', {day:'numeric', month:'short'})}</strong>.`;
-                }
-            } else { forecastBox.style.display = 'none'; }
-
-            const goalBox = document.getElementById('goal-display'); const goalOverlay = document.getElementById('goal-overlay'); const alertBox = document.getElementById('debt-warning');
-            if (appData.goalImage) { goalBox.style.display = 'block'; goalBox.style.backgroundImage = `url('${appData.goalImage}')`; } else { goalBox.style.display = 'none'; }
-
-            if (stats.remainingPot < 0) {
-                alertBox.style.display = 'block'; safeEl.style.color = 'var(--danger)'; fuelBar.style.background = 'var(--danger)';
-                goalOverlay.innerText = "OFF TRACK"; goalOverlay.style.backdropFilter = "grayscale(100%) blur(5px)"; goalOverlay.style.color = "var(--danger)";
-            } else {
-                alertBox.style.display = 'none';
-                if (percentage > 50) { safeEl.style.color = 'var(--primary)'; fuelBar.style.background = 'var(--primary)'; } 
-                else { safeEl.style.color = 'var(--warning)'; fuelBar.style.background = 'var(--warning)'; }
-                let blurAmount = (1 - stats.monthProgress) * 20; if (blurAmount < 0) blurAmount = 0;
-                goalOverlay.innerText = ""; goalOverlay.style.backdropFilter = `blur(${blurAmount}px)`;
-            }
-
-            renderList('recent-list', 5);
-            renderList('full-history-list', 1000); 
-            try { renderCharts(); } catch(e) {}
-        }
-
-        // --- RENDER LIST (WITH FILTERING) ---
-        function renderList(id, limit, filterMonth = null) {
-            const list = document.getElementById(id);
-            list.innerHTML = '';
-            const sym = appData.currency || '£';
-            
-            let lastMonthLabel = '';
-            let count = 0;
-
-            appData.transactions.forEach(tx => {
-                if (count >= limit) return;
-                
-                const d = new Date(tx.date);
-                const cycle = getCycleInfo(d);
-                const monthKey = cycle.label;
-                
-                // Filter Check
-                if (filterMonth && monthKey !== filterMonth) return;
-
-                // Month Header (Only show if NOT filtering by month, to avoid redundancy)
-                if (!filterMonth && monthKey !== lastMonthLabel) {
-                    const header = document.createElement('div');
-                    header.className = 'list-month-header';
-                    header.innerText = monthKey;
-                    list.appendChild(header);
-                    lastMonthLabel = monthKey;
-                }
-
-                const dateStr = d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
-                const methodTag = tx.method ? `<span class="tx-tag">${tx.method}</span>` : '';
-                const div = document.createElement('div');
-                div.className = "tx-item";
-                div.innerHTML = `
-                    <div class="tx-left">
-                        <span class="tx-date">${dateStr}</span>
-                        ${tx.desc} ${methodTag}
+        const todayKey = getLocalKey(today);
+        const spentToday = dailySpends[todayKey] || 0;
+        const maxSpendToKeepStreak = virtualBalance + dailyAllowance + 1.0; 
+        const remainingSafeSpend = maxSpendToKeepStreak - spentToday;
+        const detailsDiv = document.getElementById('streak-details');
+        
+        if (remainingSafeSpend >= 0) {
+            detailsDiv.innerHTML = `
+                <div class="flame-icon" style="font-size:4rem; margin-bottom:10px; display:inline-block;">🔥</div>
+                <h2 style="color:var(--primary); margin:0;">Streak Active</h2>
+                <p style="color:#aaa; font-size:0.9rem; margin-top:5px; margin-bottom:20px;">You are flying efficiently.</p>
+                <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:16px; text-align:left; margin-bottom:15px; border:1px solid rgba(255,255,255,0.1);">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.95rem;">
+                        <span class="text-muted">Safety Buffer (Past)</span>
+                        <span style="font-weight:bold;">${sym}${virtualBalance.toFixed(2)}</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <span style="font-weight:600;">-${sym}${tx.amount.toFixed(2)}</span>
-                        <span onclick="deleteTransaction(${tx.id})" style="color:var(--danger); cursor:pointer; font-weight:bold; padding:0 5px;">✕</span>
-                    </div>`;
-                list.appendChild(div);
-                count++;
-            });
-        }
-
-        // --- RENDER CHARTS (WITH FILTERING) ---
-        // --- RENDER CHARTS (FIXED: CYCLE LABELS & FILTERING) ---
-        function renderCharts(filterMonth = null) {
-            if(!document.getElementById('screen-history').classList.contains('active')) return;
-            
-            const catTotals = {}; 
-            const methodTotals = { "Debit": 0, "Cash": 0, "Credit": 0 }; 
-            const dailyTotals = {}; 
-            const monthlySavings = {};
-            
-            appData.transactions.forEach(tx => { 
-                const d = new Date(tx.date);
-                
-                // 1. USE CYCLE HELPER FOR CONSISTENT LABELS
-                const cycle = getCycleInfo(d);
-                const monthKey = cycle.label;
-                
-                // 2. APPLY FILTER TO ALL CHARTS (Including Savings)
-                if (!filterMonth || monthKey === filterMonth) {
-                    
-                    // A. Data for Details Charts
-                    catTotals[tx.category] = (catTotals[tx.category] || 0) + tx.amount;
-                    const m = tx.method || "Debit"; 
-                    methodTotals[m] = (methodTotals[m] || 0) + tx.amount;
-                    
-                    // B. Data for Trend Chart
-                    const dateKey = d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
-                    const sortKey = d.toISOString().split('T')[0]; 
-                    if(!dailyTotals[sortKey]) dailyTotals[sortKey] = { label: dateKey, val: 0 }; 
-                    dailyTotals[sortKey].val += tx.amount;
-
-                    // C. Data for Savings Chart
-                    monthlySavings[monthKey] = (monthlySavings[monthKey] || 0) + tx.amount;
-                }
-            });
-            
-            const hasData = Object.keys(catTotals).length > 0;
-            const disposableBase = appData.income - appData.fixed;
-
-            // --- SAVINGS CHART (FIXED X-AXIS) ---
-            const savingsLabels = Object.keys(monthlySavings).reverse();
-            const savingsData = savingsLabels.map(month => { 
-                const spent = monthlySavings[month]; 
-                return disposableBase - spent; 
-            });
-
-            // If filtering, we might have no data if no spend, but we still want to show the potential savings
-            if (filterMonth && savingsLabels.length === 0) {
-                savingsLabels.push(filterMonth);
-                savingsData.push(disposableBase);
-            }
-
-            const ctxSavings = document.getElementById('savingsChart').getContext('2d');
-            if(savingsChartInstance) savingsChartInstance.destroy();
-            savingsChartInstance = new Chart(ctxSavings, { 
-                type: 'bar', 
-                data: { 
-                    labels: savingsLabels.length > 0 ? savingsLabels : ['No Data'], 
-                    datasets: [{ 
-                        label: 'Total Saved', 
-                        data: savingsLabels.length > 0 ? savingsData : [0], 
-                        backgroundColor: '#2ecc71', 
-                        borderRadius: 4 
-                    }] 
-                }, 
-                options: { 
-                    maintainAspectRatio: false, 
-                    scales: { 
-                        y: { grid: { color: '#333' } }, 
-                        x: { grid: { display: false } } 
-                    } 
-                } 
-            });
-
-            // --- DONUT CHART ---
-            const ctxDonut = document.getElementById('donutChart').getContext('2d');
-            if(donutChartInstance) donutChartInstance.destroy();
-            donutChartInstance = new Chart(ctxDonut, { 
-                type: 'doughnut', 
-                data: { 
-                    labels: hasData ? Object.keys(catTotals) : ['Empty'], 
-                    datasets: [{ 
-                        data: hasData ? Object.values(catTotals) : [1], 
-                        backgroundColor: hasData ? ['#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#e74c3c', '#e67e22', '#95a5a6', '#ffffff'] : ['#333'], 
-                        borderWidth: 0 
-                    }] 
-                }, 
-                options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } 
-            });
-
-            // --- TREND CHART ---
-            const ctxTrend = document.getElementById('trendChart').getContext('2d');
-            if(trendChartInstance) trendChartInstance.destroy();
-            const sortedKeys = Object.keys(dailyTotals).sort(); 
-            const trendLabels = sortedKeys.map(k => dailyTotals[k].label); 
-            const trendData = sortedKeys.map(k => dailyTotals[k].val);
-            
-            trendChartInstance = new Chart(ctxTrend, { 
-                type: 'line', 
-                data: { 
-                    labels: trendLabels.length > 0 ? trendLabels : ['Today'], 
-                    datasets: [{ 
-                        label: 'Spend', 
-                        data: trendData.length > 0 ? trendData : [0], 
-                        borderColor: '#2ecc71', 
-                        tension: 0.4 
-                    }] 
-                }, 
-                options: { 
-                    maintainAspectRatio: false, 
-                    scales: { 
-                        y: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } }, 
-                        x: { ticks: { color: '#a0a0a0' }, grid: { display: false } } 
-                    }, 
-                    plugins: { legend: { display: false } } 
-                } 
-            });
-
-            // --- METHOD CHART ---
-            const ctxMethod = document.getElementById('methodChart').getContext('2d');
-            if(methodChartInstance) methodChartInstance.destroy();
-            methodChartInstance = new Chart(ctxMethod, { 
-                type: 'pie', 
-                data: { 
-                    labels: Object.keys(methodTotals), 
-                    datasets: [{ 
-                        data: Object.values(methodTotals), 
-                        backgroundColor: ['#2ecc71', '#f1c40f', '#e74c3c'], 
-                        borderWidth: 0 
-                    }] 
-                }, 
-                options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } 
-            });
-        }
-          // --- NEW: STREAK DIAGNOSTICS POPUP ---
-        // --- NEW: STREAK DIAGNOSTICS MODAL ---
-        // --- NEW: STREAK DIAGNOSTICS MODAL (POLISHED) ---
-        function toggleStreakModal() {
-            const modal = document.getElementById('modal-streak');
-            
-            if (modal.style.display === 'flex') {
-                modal.style.display = 'none';
-                return;
-            }
-
-            if(!appData.startDate) return;
-            const stats = getFinancials();
-            const sym = appData.currency || '£';
-
-            // 1. Re-run Streak Math
-            let start = new Date(appData.startDate);
-            if (appData.transactions.length > 0) {
-                 const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
-                 if (earliest < start) start = earliest;
-            }
-            
-            const endOfPeriod = new Date(stats.endOfPeriod);
-            const totalDaysAvailable = Math.ceil((endOfPeriod - start) / (1000 * 60 * 60 * 24));
-            const safeDays = totalDaysAvailable > 0 ? totalDaysAvailable : 1;
-            const dailyAllowance = stats.totalDisposable / safeDays;
-
-            const getLocalKey = (d) => {
-                return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-            };
-
-            const dailySpends = {};
-            appData.transactions.forEach(tx => {
-                const d = new Date(tx.date);
-                const key = getLocalKey(d);
-                dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
-            });
-
-            // Calculate Past Buffer
-            let virtualBalance = 0;
-            const today = new Date();
-            const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
-            
-            let cursor = new Date(start);
-            cursor.setHours(0,0,0,0);
-            yesterday.setHours(0,0,0,0);
-            
-            while (cursor <= yesterday) {
-                virtualBalance += dailyAllowance;
-                const key = getLocalKey(cursor);
-                virtualBalance -= (dailySpends[key] || 0);
-                cursor.setDate(cursor.getDate() + 1);
-            }
-
-            // Today's Data
-            const todayKey = getLocalKey(today);
-            const spentToday = dailySpends[todayKey] || 0;
-            
-            // The Math
-            const maxSpendToKeepStreak = virtualBalance + dailyAllowance + 1.0; 
-            const remainingSafeSpend = maxSpendToKeepStreak - spentToday;
-            
-            // HTML Generation
-            const detailsDiv = document.getElementById('streak-details');
-            
-            if (remainingSafeSpend >= 0) {
-                // STREAK ALIVE
-                detailsDiv.innerHTML = `
-                    <div class="flame-icon" style="font-size:4rem; margin-bottom:10px; display:inline-block;">🔥</div>
-                    <h2 style="color:var(--primary); margin:0;">Streak Active</h2>
-                    <p style="color:#aaa; font-size:0.9rem; margin-top:5px; margin-bottom:20px;">You are flying efficiently.</p>
-                    
-                    <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:16px; text-align:left; margin-bottom:15px; border:1px solid rgba(255,255,255,0.1);">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.95rem;">
-                            <span class="text-muted">Safety Buffer (Past)</span>
-                            <span style="font-weight:bold;">${sym}${virtualBalance.toFixed(2)}</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:15px; font-size:0.95rem;">
-                            <span class="text-muted">Today's Allowance</span>
-                            <span style="font-weight:bold;">${sym}${dailyAllowance.toFixed(2)}</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.2rem;">
-                            <span>Max Spend Limit</span>
-                            <span style="color:var(--primary);">${sym}${maxSpendToKeepStreak.toFixed(2)}</span>
-                        </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:15px; font-size:0.95rem;">
+                        <span class="text-muted">Today's Allowance</span>
+                        <span style="font-weight:bold;">${sym}${dailyAllowance.toFixed(2)}</span>
                     </div>
-                    
-                    <p style="font-size:0.9rem; line-height:1.6; color:#ccc;">
-                        You have spent <strong>${sym}${spentToday.toFixed(2)}</strong> today.<br>
-                        Stay under <span style="color:var(--primary); font-weight:bold;">${sym}${maxSpendToKeepStreak.toFixed(2)}</span> to keep the fire burning.
-                    </p>
-                `;
+                    <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.2rem;">
+                        <span>Max Spend Limit</span>
+                        <span style="color:var(--primary);">${sym}${maxSpendToKeepStreak.toFixed(2)}</span>
+                    </div>
+                </div>
+                <p style="font-size:0.9rem; line-height:1.6; color:#ccc;">
+                    You have spent <strong>${sym}${spentToday.toFixed(2)}</strong> today.<br>
+                    Stay under <span style="color:var(--primary); font-weight:bold;">${sym}${maxSpendToKeepStreak.toFixed(2)}</span>.
+                </p>`;
+        } else {
+            detailsDiv.innerHTML = `
+                <div style="font-size:4rem; margin-bottom:10px;">🧊</div>
+                <h2 style="color:var(--danger); margin:0;">Streak Broken</h2>
+                <p style="color:#aaa; font-size:0.9rem; margin-top:5px; margin-bottom:20px;">You exceeded your flight envelope.</p>
+                 <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:16px; text-align:left; margin-bottom:15px; border:1px solid rgba(255,255,255,0.1);">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span class="text-muted">Max Limit</span>
+                        <span>${sym}${maxSpendToKeepStreak.toFixed(2)}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.2rem;">
+                        <span>You Spent</span>
+                        <span style="color:var(--danger);">${sym}${spentToday.toFixed(2)}</span>
+                    </div>
+                </div>
+                <p style="font-size:0.9rem; color:#aaa;">Start fresh tomorrow.</p>`;
+        }
+        modal.style.display = 'flex';
+    }
+
+    // --- UI UPDATES ---
+    function updateUI() {
+        const stats = getFinancials();
+        const sym = appData.currency || '£';
+        document.getElementById('greeting-display').innerText = appData.username;
+        
+        const streakCount = calculateStreak();
+        const streakBadge = document.getElementById('streak-badge');
+        if(streakCount > 0) { streakBadge.style.display = 'inline-flex'; document.getElementById('streak-count').innerText = streakCount + " Day Streak"; } 
+        else { streakBadge.style.display = 'none'; }
+
+        const safeEl = document.getElementById('safe-balance');
+        const potEl = document.getElementById('total-pot');
+        let displayDaily = stats.dailySafe < 0 ? 0 : stats.dailySafe;
+        safeEl.innerText = `${sym}${displayDaily.toFixed(2)}`;
+        potEl.innerText = `${sym}${stats.remainingPot.toFixed(2)}`;
+
+        const fuelBar = document.getElementById('fuel-bar');
+        let percentage = (stats.remainingPot / stats.totalDisposable) * 100;
+        if (percentage < 0) percentage = 0; if (percentage > 100) percentage = 100;
+        fuelBar.style.width = percentage + '%';
+
+        const forecastBox = document.getElementById('forecast-display');
+        const forecastText = document.getElementById('forecast-text');
+        if (stats.totalSpent > 0 && stats.remainingPot > 0) {
+            forecastBox.style.display = 'flex';
+            const avgBurn = stats.totalSpent / stats.daysActive; 
+            const daysRemaining = stats.safeDaysLeft;
+            const projectedEndBalance = stats.remainingPot - (avgBurn * daysRemaining);
+            if (projectedEndBalance >= 0) {
+                forecastBox.style.borderLeft = "4px solid var(--primary)"; forecastBox.style.background = "rgba(46, 204, 113, 0.1)";
+                forecastText.innerHTML = `<strong>Smooth Sailing.</strong><br>Burning ${sym}${avgBurn.toFixed(0)}/day (Active: ${stats.daysActive} days). Land with <strong>${sym}${projectedEndBalance.toFixed(0)}</strong>.`;
             } else {
-                // STREAK BROKEN
-                detailsDiv.innerHTML = `
-                    <div style="font-size:4rem; margin-bottom:10px;">🧊</div>
-                    <h2 style="color:var(--danger); margin:0;">Streak Broken</h2>
-                    <p style="color:#aaa; font-size:0.9rem; margin-top:5px; margin-bottom:20px;">You exceeded your flight envelope.</p>
-                    
-                     <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:16px; text-align:left; margin-bottom:15px; border:1px solid rgba(255,255,255,0.1);">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <span class="text-muted">Max Limit (Buffer+Daily)</span>
-                            <span>${sym}${maxSpendToKeepStreak.toFixed(2)}</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.2rem;">
-                            <span>You Spent</span>
-                            <span style="color:var(--danger);">${sym}${spentToday.toFixed(2)}</span>
-                        </div>
-                    </div>
-                    <p style="font-size:0.9rem; color:#aaa;">Start fresh tomorrow. Consistency is key.</p>
-                `;
+                forecastBox.style.borderLeft = "4px solid var(--danger)"; forecastBox.style.background = "rgba(231, 76, 60, 0.1)";
+                const daysUntilCrash = avgBurn > 0 ? (stats.remainingPot / avgBurn) : 0;
+                const crashDate = new Date(); crashDate.setDate(new Date().getDate() + daysUntilCrash);
+                forecastText.innerHTML = `<strong>Pull Up!</strong><br>Burning ${sym}${avgBurn.toFixed(0)}/day. Dry on <strong>${crashDate.toLocaleDateString('en-GB', {day:'numeric', month:'short'})}</strong>.`;
             }
+        } else { forecastBox.style.display = 'none'; }
 
-            modal.style.display = 'flex';
+        const goalBox = document.getElementById('goal-display'); const goalOverlay = document.getElementById('goal-overlay'); const alertBox = document.getElementById('debt-warning');
+        if (appData.goalImage) { goalBox.style.display = 'block'; goalBox.style.backgroundImage = `url('${appData.goalImage}')`; } else { goalBox.style.display = 'none'; }
+
+        if (stats.remainingPot < 0) {
+            alertBox.style.display = 'block'; safeEl.style.color = 'var(--danger)'; fuelBar.style.background = 'var(--danger)';
+            goalOverlay.innerText = "OFF TRACK"; goalOverlay.style.backdropFilter = "grayscale(100%) blur(5px)"; goalOverlay.style.color = "var(--danger)";
+        } else {
+            alertBox.style.display = 'none';
+            if (percentage > 50) { safeEl.style.color = 'var(--primary)'; fuelBar.style.background = 'var(--primary)'; } 
+            else { safeEl.style.color = 'var(--warning)'; fuelBar.style.background = 'var(--warning)'; }
+            let blurAmount = (1 - stats.monthProgress) * 20; if (blurAmount < 0) blurAmount = 0;
+            goalOverlay.innerText = ""; goalOverlay.style.backdropFilter = `blur(${blurAmount}px)`;
         }
 
+        renderList('recent-list', 5);
+        renderList('full-history-list', 1000); 
+        try { renderCharts(); } catch(e) {}
+    }
 
-        function clearAllData() { if(confirm("Factory Reset?")) { localStorage.removeItem('pilotData'); location.reload(); } }
-    </script>
-</body>
-</html>
+    // --- DASHBOARD: REPORTS (HYBRID: Uses History Lookup) ---
+    function updateDashboard(selectedMonth) {
+        renderReportCard(selectedMonth);
+        renderCharts(selectedMonth);
+        renderList('full-history-list', 1000, selectedMonth);
+    }
+
+    function renderReportCard(selectedMonth) {
+        const card = document.getElementById('monthly-report-card');
+        if(!selectedMonth) { card.style.display = 'none'; return; }
+        
+        card.style.display = 'block';
+        let monthlySpend = 0;
+        const catBreakdown = {};
+        const sym = appData.currency || '£';
+        
+        // Use Code 1's History Lookup
+        const planParams = getPlanForCycle(selectedMonth);
+
+        appData.transactions.forEach(tx => {
+            const d = new Date(tx.date);
+            const cycle = getCycleInfo(d);
+            if(cycle.label === selectedMonth) {
+                monthlySpend += tx.amount;
+                catBreakdown[tx.category] = (catBreakdown[tx.category] || 0) + tx.amount;
+            }
+        });
+
+        let maxLeak = 0; let leakCat = "None";
+        for(const [cat, amt] of Object.entries(catBreakdown)) {
+            if(amt > maxLeak) { maxLeak = amt; leakCat = cat; }
+        }
+        
+        // Calculate Net using HISTORICAL data if available
+        const net = (planParams.income - planParams.fixed) - monthlySpend;
+
+        document.getElementById('rpt-spent').innerText = `${sym}${monthlySpend.toFixed(2)}`;
+        document.getElementById('rpt-saved').innerText = `${sym}${net.toFixed(2)}`;
+        document.getElementById('rpt-leak').innerText = `${leakCat} (${sym}${maxLeak.toFixed(0)})`;
+    }
+
+    function renderList(id, limit, filterMonth = null) {
+        const list = document.getElementById(id);
+        list.innerHTML = '';
+        const sym = appData.currency || '£';
+        let lastMonthLabel = ''; let count = 0;
+
+        appData.transactions.forEach(tx => {
+            if (count >= limit) return;
+            const d = new Date(tx.date);
+            const cycle = getCycleInfo(d); 
+            
+            if (filterMonth && cycle.label !== filterMonth) return;
+
+            if (!filterMonth && cycle.label !== lastMonthLabel) {
+                const header = document.createElement('div');
+                header.className = 'list-month-header';
+                header.innerText = cycle.label;
+                list.appendChild(header);
+                lastMonthLabel = cycle.label;
+            }
+
+            const dateStr = d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+            const methodTag = tx.method ? `<span class="tx-tag">${tx.method}</span>` : '';
+            const div = document.createElement('div');
+            div.className = "tx-item";
+            div.innerHTML = `
+                <div class="tx-left">
+                    <span class="tx-date">${dateStr}</span>
+                    ${tx.desc} ${methodTag}
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-weight:600;">-${sym}${tx.amount.toFixed(2)}</span>
+                    <span onclick="deleteTransaction(${tx.id})" style="color:var(--danger); cursor:pointer; font-weight:bold; padding:0 5px;">✕</span>
+                </div>`;
+            list.appendChild(div);
+            count++;
+        });
+    }
+
+    // --- CHARTS (HYBRID: Uses History for Savings, Code 2 Filter logic) ---
+    function renderCharts(filterMonth = null) {
+        if(!document.getElementById('screen-history').classList.contains('active')) return;
+        const catTotals = {}; const methodTotals = { "Debit": 0, "Cash": 0, "Credit": 0 }; const dailyTotals = {}; const monthlySavings = {};
+        
+        appData.transactions.forEach(tx => { 
+            const d = new Date(tx.date);
+            const cycle = getCycleInfo(d);
+            
+            if (!filterMonth || cycle.label === filterMonth) {
+                catTotals[tx.category] = (catTotals[tx.category] || 0) + tx.amount;
+                const m = tx.method || "Debit"; methodTotals[m] = (methodTotals[m] || 0) + tx.amount;
+                const dateKey = new Date(tx.date).toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+                const sortKey = new Date(tx.date).toISOString().split('T')[0]; 
+                if(!dailyTotals[sortKey]) dailyTotals[sortKey] = { label: dateKey, val: 0 }; dailyTotals[sortKey].val += tx.amount;
+            }
+            
+            // Savings Data Accumulation
+            if (!filterMonth || cycle.label === filterMonth) {
+                 monthlySavings[cycle.label] = (monthlySavings[cycle.label] || 0) + tx.amount;
+            }
+        });
+        
+        const hasData = Object.keys(catTotals).length > 0;
+        
+        // HYBRID: Savings Calculation using SMART HISTORY
+        const savingsLabels = Object.keys(monthlySavings).reverse(); 
+        const savingsData = savingsLabels.map(label => { 
+            const spent = monthlySavings[label]; 
+            const plan = getPlanForCycle(label); // Uses Historical Data
+            const disposable = plan.income - plan.fixed;
+            return disposable - spent; 
+        });
+        
+        // Handle Empty State for Savings Chart
+        if (filterMonth && savingsLabels.length === 0) {
+            savingsLabels.push(filterMonth);
+            const plan = getPlanForCycle(filterMonth);
+            savingsData.push(plan.income - plan.fixed);
+        }
+
+        const ctxSavings = document.getElementById('savingsChart').getContext('2d');
+        if(savingsChartInstance) savingsChartInstance.destroy();
+        savingsChartInstance = new Chart(ctxSavings, { type: 'bar', data: { labels: savingsLabels.length>0?savingsLabels:['No Data'], datasets: [{ label: 'Total Saved', data: savingsLabels.length>0?savingsData:[0], backgroundColor: '#2ecc71', borderRadius: 4 }] }, options: { maintainAspectRatio: false, scales: { y: { grid: { color: '#333' } }, x: { grid: { display: false } } } } });
+
+        const ctxDonut = document.getElementById('donutChart').getContext('2d');
+        if(donutChartInstance) donutChartInstance.destroy();
+        donutChartInstance = new Chart(ctxDonut, { type: 'doughnut', data: { labels: hasData ? Object.keys(catTotals) : ['Empty'], datasets: [{ data: hasData ? Object.values(catTotals) : [1], backgroundColor: hasData ? ['#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#e74c3c', '#e67e22', '#95a5a6', '#ffffff'] : ['#333'], borderWidth: 0 }] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } });
+
+        const ctxTrend = document.getElementById('trendChart').getContext('2d');
+        if(trendChartInstance) trendChartInstance.destroy();
+        const sortedKeys = Object.keys(dailyTotals).sort(); const trendLabels = sortedKeys.map(k => dailyTotals[k].label); const trendData = sortedKeys.map(k => dailyTotals[k].val);
+        trendChartInstance = new Chart(ctxTrend, { type: 'line', data: { labels: trendLabels.length>0?trendLabels:['Today'], datasets: [{ label: 'Spend', data: trendData.length>0?trendData:[0], borderColor: '#2ecc71', tension: 0.4 }] }, options: { maintainAspectRatio: false, scales: { y: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } }, x: { ticks: { color: '#a0a0a0' }, grid: { display: false } } }, plugins: { legend: { display: false } } } });
+
+        const ctxMethod = document.getElementById('methodChart').getContext('2d');
+        if(methodChartInstance) methodChartInstance.destroy();
+        methodChartInstance = new Chart(ctxMethod, { type: 'pie', data: { labels: Object.keys(methodTotals), datasets: [{ data: Object.values(methodTotals), backgroundColor: ['#2ecc71', '#f1c40f', '#e74c3c'], borderWidth: 0 }] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } });
+    }
+</script>
