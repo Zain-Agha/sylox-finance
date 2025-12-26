@@ -936,11 +936,20 @@
     }
 
     // --- STREAK LOGIC (FROM CODE 2: UNIVERSAL TIME) ---
+    // --- FIXED STREAK LOGIC (CYCLICAL) ---
     function calculateStreak() {
-        if(!appData.startDate) return 0;
+        // 1. Get the exact same math the Dashboard uses
         const stats = getFinancials();
         
-        // Helper: Generate a "YYYY-MM-DD" string based on the PHONE'S local clock.
+        // 2. Define the Cycle Start (instead of App Install Date)
+        // This ensures we only look at Jan '25 data if we are in Jan '25
+        let start = new Date(stats.startOfPeriod);
+        start.setHours(0,0,0,0);
+
+        // 3. Calculate "Planned" Daily Allowance for THIS cycle
+        // (Total Disposable / Total Days in Month)
+        const dailyAllowance = stats.totalDisposable / stats.daysInMonth;
+
         const getLocalKey = (d) => {
             const year = d.getFullYear();
             const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -948,78 +957,77 @@
             return `${year}-${month}-${day}`;
         };
 
-        let start = new Date(appData.startDate);
-        if (appData.transactions.length > 0) {
-             const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
-             if (earliest < start) start = earliest;
-        }
-        
-        const endOfPeriod = new Date(stats.endOfPeriod);
-        const totalDaysAvailable = Math.ceil((endOfPeriod - start) / (1000 * 60 * 60 * 24));
-        const safeDays = totalDaysAvailable > 0 ? totalDaysAvailable : 1;
-        const dailyAllowance = stats.totalDisposable / safeDays;
-
         const dailySpends = {};
         appData.transactions.forEach(tx => {
             const d = new Date(tx.date);
-            const key = getLocalKey(d);
-            dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
+            // Only count transactions that fall inside this current cycle
+            if (d >= start && d <= stats.endOfPeriod) {
+                const key = getLocalKey(d);
+                dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
+            }
         });
 
         let streak = 0;
         const today = new Date(); 
         let virtualBalance = 0; 
         const history = [];
-        let cursor = new Date(start); cursor.setHours(0,0,0,0);
+        let cursor = new Date(start); 
         const todayMidnight = new Date(today); todayMidnight.setHours(0,0,0,0);
         
+        // Loop ONLY from Start of Cycle -> Today
         while (cursor <= todayMidnight) {
             virtualBalance += dailyAllowance;
             const key = getLocalKey(cursor);
             const spent = dailySpends[key] || 0;
             virtualBalance -= spent;
+            
+            // Allow a tiny buffer of -1.0 for floating point errors
             if (virtualBalance >= -1.0) history.push(true); else history.push(false);
             cursor.setDate(cursor.getDate() + 1);
         }
 
-        for (let i = history.length - 1; i >= 0; i--) { if (history[i] === true) streak++; else break; }
+        // Count backwards from today
+        for (let i = history.length - 1; i >= 0; i--) { 
+            if (history[i] === true) streak++; 
+            else break; 
+        }
         return streak;
     }
 
-    // --- MODAL: STREAK DETAILS (FROM CODE 2) ---
+    // --- FIXED MODAL LOGIC (MATCHES DASHBOARD) ---
     function toggleStreakModal() {
         const modal = document.getElementById('modal-streak');
         if (modal.style.display === 'flex') { modal.style.display = 'none'; return; }
 
-        if(!appData.startDate) return;
         const stats = getFinancials();
         const sym = appData.currency || '£';
 
-        let start = new Date(appData.startDate);
-        if (appData.transactions.length > 0) {
-             const earliest = new Date(appData.transactions[appData.transactions.length-1].date);
-             if (earliest < start) start = earliest;
-        }
-        
-        const endOfPeriod = new Date(stats.endOfPeriod);
-        const totalDaysAvailable = Math.ceil((endOfPeriod - start) / (1000 * 60 * 60 * 24));
-        const safeDays = totalDaysAvailable > 0 ? totalDaysAvailable : 1;
-        const dailyAllowance = stats.totalDisposable / safeDays;
+        // 1. Sync start date with the Dashboard Cycle
+        let start = new Date(stats.startOfPeriod);
+        start.setHours(0,0,0,0);
+
+        // 2. Use the Current Cycle's Planned Allowance
+        const dailyAllowance = stats.totalDisposable / stats.daysInMonth;
 
         const getLocalKey = (d) => { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
 
         const dailySpends = {};
         appData.transactions.forEach(tx => {
             const d = new Date(tx.date);
-            const key = getLocalKey(d);
-            dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
+            // Filter: Only Current Cycle
+            if (d >= start && d <= stats.endOfPeriod) {
+                const key = getLocalKey(d);
+                dailySpends[key] = (dailySpends[key] || 0) + tx.amount;
+            }
         });
 
         let virtualBalance = 0;
         const today = new Date();
         const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
-        let cursor = new Date(start); cursor.setHours(0,0,0,0); yesterday.setHours(0,0,0,0);
+        let cursor = new Date(start); 
+        yesterday.setHours(0,0,0,0);
         
+        // Calculate the "Past Buffer" up to yesterday
         while (cursor <= yesterday) {
             virtualBalance += dailyAllowance;
             const key = getLocalKey(cursor);
@@ -1029,38 +1037,44 @@
 
         const todayKey = getLocalKey(today);
         const spentToday = dailySpends[todayKey] || 0;
-        const maxSpendToKeepStreak = virtualBalance + dailyAllowance + 1.0; 
+        
+        // Max Spend = Whatever buffer you built up + Today's fresh allowance
+        const maxSpendToKeepStreak = virtualBalance + dailyAllowance; 
         const remainingSafeSpend = maxSpendToKeepStreak - spentToday;
+        
         const detailsDiv = document.getElementById('streak-details');
         
-        if (remainingSafeSpend >= 0) {
+        // Logic to determine if Streak is Active/Broken based on Today
+        const isStreakBroken = remainingSafeSpend < -1.0; // Tolerance of 1.0
+
+        if (!isStreakBroken) {
             detailsDiv.innerHTML = `
                 <div class="flame-icon" style="font-size:4rem; margin-bottom:10px; display:inline-block;">🔥</div>
                 <h2 style="color:var(--primary); margin:0;">Streak Active</h2>
-                <p style="color:#aaa; font-size:0.9rem; margin-top:5px; margin-bottom:20px;">You are flying efficiently.</p>
+                <p style="color:#aaa; font-size:0.9rem; margin-top:5px; margin-bottom:20px;">Current Cycle Performance</p>
                 <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:16px; text-align:left; margin-bottom:15px; border:1px solid rgba(255,255,255,0.1);">
                     <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.95rem;">
-                        <span class="text-muted">Safety Buffer (Past)</span>
-                        <span style="font-weight:bold;">${sym}${virtualBalance.toFixed(2)}</span>
+                        <span class="text-muted">Cycle Buffer (Past)</span>
+                        <span style="font-weight:bold; color:${virtualBalance >= 0 ? 'var(--primary)' : 'var(--danger)'}">${sym}${virtualBalance.toFixed(2)}</span>
                     </div>
                     <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:15px; font-size:0.95rem;">
                         <span class="text-muted">Today's Allowance</span>
                         <span style="font-weight:bold;">${sym}${dailyAllowance.toFixed(2)}</span>
                     </div>
                     <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.2rem;">
-                        <span>Max Spend Limit</span>
+                        <span>Max Limit Today</span>
                         <span style="color:var(--primary);">${sym}${maxSpendToKeepStreak.toFixed(2)}</span>
                     </div>
                 </div>
                 <p style="font-size:0.9rem; line-height:1.6; color:#ccc;">
-                    You have spent <strong>${sym}${spentToday.toFixed(2)}</strong> today.<br>
-                    Stay under <span style="color:var(--primary); font-weight:bold;">${sym}${maxSpendToKeepStreak.toFixed(2)}</span>.
+                    Spent Today: <strong>${sym}${spentToday.toFixed(2)}</strong><br>
+                    Keep total under: <span style="color:var(--primary); font-weight:bold;">${sym}${maxSpendToKeepStreak.toFixed(2)}</span>
                 </p>`;
         } else {
             detailsDiv.innerHTML = `
                 <div style="font-size:4rem; margin-bottom:10px;">🧊</div>
                 <h2 style="color:var(--danger); margin:0;">Streak Broken</h2>
-                <p style="color:#aaa; font-size:0.9rem; margin-top:5px; margin-bottom:20px;">You exceeded your flight envelope.</p>
+                <p style="color:#aaa; font-size:0.9rem; margin-top:5px; margin-bottom:20px;">Over budget for this cycle.</p>
                  <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:16px; text-align:left; margin-bottom:15px; border:1px solid rgba(255,255,255,0.1);">
                     <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                         <span class="text-muted">Max Limit</span>
@@ -1071,11 +1085,10 @@
                         <span style="color:var(--danger);">${sym}${spentToday.toFixed(2)}</span>
                     </div>
                 </div>
-                <p style="font-size:0.9rem; color:#aaa;">Start fresh tomorrow.</p>`;
+                <p style="font-size:0.9rem; color:#aaa;">Wait for next Pay Cycle to restart.</p>`;
         }
         modal.style.display = 'flex';
     }
-
     // --- UI UPDATES ---
     function updateUI() {
         const stats = getFinancials();
